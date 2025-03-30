@@ -1,3 +1,4 @@
+# config.py
 """
 Arquivo de configurações para o sistema de avaliação fisioterapêutica.
 Contém as definições de cores, fontes, outros elementos visuais e configurações da aplicação.
@@ -24,23 +25,27 @@ CORES = {
     "frame_bg": "#00ab7d",       # Verde turquesa para frames
     "notebook_bg": "#00ab7d",    # Verde turquesa para notebooks
     "tab_bg": "#008c66",         # Verde mais escuro para abas
-    "button_bg": "#008c66"       # Verde mais escuro para botões
+    "button_bg": "#008c66",      # Verde mais escuro para botões
+    "erro": "#e74c3c",
 }
 
 # Configurações de fonte
 FONTES = {
-    "titulo": ("Segoe UI", 22, "bold"),        # Já aumentado
-    "secao": ("Segoe UI", 18, "bold"),         # Já aumentado
-    "subsecao": ("Segoe UI", 16, "bold"),      # Já criado
-    "campo": ("Segoe UI", 14),                 # Já aumentado
-    "subcampo": ("Segoe UI", 14),              # Já aumentado
-    "botao": ("Segoe UI", 14, "bold"),         # Já aumentado
-    "texto_secao": ("Segoe UI", 16, "bold"),   # Já criado
-    "cabecalho_card": ("Segoe UI", 18, "bold"), # Nova fonte para cabeçalhos de cards
-
-    # Novas definições
-    "cabecalho_card": ("Segoe UI", 20, "bold"),   # Para cabeçalhos de cards
+    "titulo": ("Segoe UI", 22, "bold"),           # Já aumentado
+    "secao": ("Segoe UI", 18, "bold"),            # Já aumentado
+    "subsecao": ("Segoe UI", 16, "bold"),         # Já criado
+    "campo": ("Segoe UI", 14),                    # Já aumentado
+    "subcampo": ("Segoe UI", 14),                 # Já aumentado
+    "botao": ("Segoe UI", 14, "bold"),            # Já aumentado
+    "texto_secao": ("Segoe UI", 16, "bold"),      # Já criado
+    "cabecalho_card": ("Segoe UI", 18, "bold"),   # Nova fonte para cabeçalhos de cards
     "subtitulo_secao": ("Segoe UI", 18, "bold"),  # Para subtítulos de seções
+    
+    # Novas definições
+    "subtitulo_campo": ("Segoe UI", 16, "bold"),  # Adicionado para corrigir erro
+    "campo_destaque": ("Segoe UI", 14, "bold"),   # Fonte para campos destacados
+    "campo_pequeno": ("Segoe UI", 12),            # Fonte para campos pequenos
+    "texto_secundario": ("Segoe UI", 12),         # Fonte para texto secundário
     "checkbox_texto": ("Segoe UI", 14)            # Para texto de checkboxes
 }
 
