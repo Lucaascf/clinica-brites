@@ -1,134 +1,79 @@
-# config.py
-"""
-Arquivo de configurações para o sistema de avaliação fisioterapêutica.
-Contém as definições de cores, fontes, outros elementos visuais e configurações da aplicação.
-"""
+# Arquivo de configurações do Sistema de Avaliação Fisioterapêutica
 
-# URL do servidor
+# URL do servidor (para sistemas integrados)
 SERVER_URL = "http://localhost:5000"
 
-# Configurações de cores principais
+# Cores do sistema (paleta harmonizada com #00ab7d como cor principal)
 CORES = {
-    "primaria": "#00ab7d",       # Verde turquesa (cor principal de fundo)
-    "secundaria": "#3498db",     # Azul claro (para destaques e botões)
-    "destaque": "#e74c3c",       # Vermelho (para alertas e elementos importantes)
-    "fundo": "#00ab7d",          # Verde turquesa para o fundo geral
-    "titulo_bg": "#00ab7d",      # Verde turquesa para o fundo dos títulos
-    "texto": "#000000",          # Texto preto
-    "texto_destaque": "#ffffff", # Texto branco para destaques
-    "sucesso": "#2ecc71",        # Verde (para mensagens de sucesso e botões positivos)
-    "aviso": "#f39c12",          # Laranja (para avisos)
-    "campo_bg": "#ffffff",       # Branco para campos de entrada
-    "secao_bg": "#00ab7d",       # Verde turquesa para seções
-    "info": "#3498db",           # Azul informativo
-    "borda": "#008c66",          # Verde mais escuro para bordas (variação do primário)
-    "frame_bg": "#00ab7d",       # Verde turquesa para frames
-    "notebook_bg": "#00ab7d",    # Verde turquesa para notebooks
-    "tab_bg": "#008c66",         # Verde mais escuro para abas
-    "button_bg": "#008c66",      # Verde mais escuro para botões
-    "erro": "#e74c3c",
+    "fundo": "#f5f8f7",           # Fundo principal (verde muito claro)
+    "secao_bg": "#ffffff",        # Fundo das seções (branco)
+    "titulo_bg": "#00805e",       # Verde escuro para títulos (75% da cor principal)
+    "texto_destaque": "#000000",  # Texto sobre fundos coloridos (branco)
+    "texto": "#1a2a25",           # Texto principal escuro - melhor contraste com verde
+    "texto_rotulo": "#00805e",    # Verde escuro para rótulos - mesma cor dos títulos
+    "campo_bg": "#f7fcfa",        # Fundo dos campos (verde muito suave)
+    "primaria": "#00ab7d",        # Cor primária (verde esmeralda - cor principal)
+    "secundaria": "#009688",      # Cor secundária (verde azulado complementar)
+    "sucesso": "#00c853",         # Verde vivo
+    "erro": "#e53935",            # Vermelho escuro
+    "aviso": "#ff9800",           # Laranja (cor complementar ao verde)
+    "notebook_bg": "#e8f5f0",     # Fundo do notebook (verde muito claro)
+    "tab_bg": "#80d5bb",          # Fundo das abas (verde médio claro)
+    "button_bg": "#00805e",       # Botões (verde escuro)
+    "separador": "#cce6df"        # Cor dos separadores (verde claro)
 }
 
-# Configurações de fonte
+# Tipografia com fontes mais consistentes
 FONTES = {
-    "titulo": ("Segoe UI", 22, "bold"),           # Já aumentado
-    "secao": ("Segoe UI", 18, "bold"),            # Já aumentado
-    "subsecao": ("Segoe UI", 16, "bold"),         # Já criado
-    "campo": ("Segoe UI", 14),                    # Já aumentado
-    "subcampo": ("Segoe UI", 14),                 # Já aumentado
-    "botao": ("Segoe UI", 14, "bold"),            # Já aumentado
-    "texto_secao": ("Segoe UI", 16, "bold"),      # Já criado
-    "cabecalho_card": ("Segoe UI", 18, "bold"),   # Nova fonte para cabeçalhos de cards
-    "subtitulo_secao": ("Segoe UI", 18, "bold"),  # Para subtítulos de seções
-    
-    # Novas definições
-    "subtitulo_campo": ("Segoe UI", 16, "bold"),  # Adicionado para corrigir erro
-    "campo_destaque": ("Segoe UI", 14, "bold"),   # Fonte para campos destacados
-    "campo_pequeno": ("Segoe UI", 12),            # Fonte para campos pequenos
-    "texto_secundario": ("Segoe UI", 12),         # Fonte para texto secundário
-    "checkbox_texto": ("Segoe UI", 14)            # Para texto de checkboxes
+    "titulo": ("Segoe UI", 16, "bold"),
+    "secao": ("Segoe UI", 14, "bold"),
+    "subtitulo_secao": ("Segoe UI", 13, "bold"),
+    "texto_secao": ("Segoe UI", 12, "bold"),
+    "cabecalho_card": ("Segoe UI", 12, "bold"),
+    "subsecao": ("Segoe UI", 11, "bold"),
+    "campo": ("Segoe UI", 11),
+    "campo_destaque": ("Segoe UI", 11, "bold"),
+    "campo_pequeno": ("Segoe UI", 10),
+    "subcampo": ("Segoe UI", 10, "italic"),
+    "botao": ("Segoe UI", 11, "bold"),
+    "checkbox_texto": ("Segoe UI", 10)
 }
 
-# Configurações de tamanho
+# Tamanhos padrão
 TAMANHOS = {
-    "padding_padrao": 14,
-    "margem_secao": 15,
-    "altura_inicial_campo": 2,
-    "altura_maxima_campo": 6
+    "padding_padrao": 12,
+    "largura_janela": 1200,
+    "altura_janela": 800,
+    "largura_coluna": 150,
+    "altura_inicial_campo": 3,     # Aumentado de 2 para 3
+    "altura_maxima_campo": 20      # Aumentado de 8 para 20
 }
 
-# Configurações de estilo para widgets
+# Estilos para componentes
 ESTILOS = {
-    # Labels
-    "titulo_label": {
-        "font": FONTES["titulo"],
-        "background": CORES["titulo_bg"],
-        "foreground": CORES["texto_destaque"]
-    },
-    "secao_label": {
-        "font": FONTES["secao"],
-        "background": CORES["secao_bg"],
-        "foreground": CORES["texto_destaque"]
-    },
-    "campo_label": {
-        "font": FONTES["campo"],
-        "background": CORES["secao_bg"],
-        "foreground": CORES["texto_destaque"]
-    },
-    
-    # Frames
-    "titulo_frame": {
-        "background": CORES["titulo_bg"]
-    },
-    "secao_frame": {
-        "background": CORES["secao_bg"]
-    },
-    
-    # Botões
-    "botao_primario": {
-        "background": CORES["button_bg"],
-        "foreground": CORES["texto_destaque"]
-    },
-    "botao_sucesso": {
-        "background": CORES["sucesso"],
-        "foreground": CORES["texto_destaque"]
-    },
-    "botao_aviso": {
-        "background": CORES["aviso"],
-        "foreground": CORES["texto_destaque"]
-    },
-    
-    # Campos de texto
-    "campo_texto": {
-        "background": CORES["campo_bg"],
-        "foreground": CORES["texto"],
-        "relief": "flat",
-        "highlightthickness": 1,
-        "highlightbackground": CORES["borda"],
-        "highlightcolor": CORES["secundaria"]
-    }
+    "arredondamento_botao": 5,
+    "borda_campo": 1,
+    "sombreamento": "2px 2px 5px rgba(0, 171, 125, 0.2)"  # Sombra verde suave
 }
 
-# Configurações do formulário
+# Configurações específicas do formulário
 CONFIG_FORMULARIO = {
-    "num_colunas": 2,  # Número de colunas para layout responsivo
-    "dir_dados": "dados_pacientes"  # Diretório para salvar os dados
+    "num_colunas": 12,  # Para layout responsivo
+    "altura_maxima_texto": 25,     # Aumentado de 10 para 25
+    "largura_padrao_campo": 60     # Aumentado de 40 para 60
 }
 
-# Opções pré-definidas para comboboxes
+# Opções para campos de seleção
 OPCOES = {
-    "sesiones_semana": ["1", "2", "3", "4", "5", "Otra"],
-    "duracion_sesion": ["30 minutos", "45 minutos", "60 minutos", "90 minutos", "Otra"]
+    "sesiones_semana": ["1", "2", "3", "4", "5", "7"],
+    "duracion_sesion": ["30 minutos", "45 minutos", "60 minutos", "90 minutos"]
 }
 
-# Escalas
+# Escalas (para EVA e outras medições)
 ESCALAS = {
-    "eva": {
-        "min": 0,
-        "max": 10,
-        "default": 0
-    }
+    "eva": {"min": 0, "max": 10, "step": 1},
+    "forca_muscular": {"min": 0, "max": 5, "step": 1}
 }
 
-# Outras configurações
-PLACEHOLDER_COLOR = "#666666" 
+# Cores para campos de placeholder
+PLACEHOLDER_COLOR = "#9cbdb2"  # Tom médio de verde acinzentado

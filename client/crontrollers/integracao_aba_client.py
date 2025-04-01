@@ -7,7 +7,7 @@ para editar uma avaliação existente ou criar uma nova avaliação para um paci
 
 import tkinter as tk
 from tkinter import ttk, messagebox
-from aba_clientes import AbaClientes
+from client.ui.aba_clientes import AbaClientes
 from server.database import BancoDadosFisioterapia, modificar_salvar_formulario
 
 class IntegradorSistema:
@@ -39,7 +39,7 @@ class IntegradorSistema:
         self.notebook.pack(expand=True, fill="both")
         
         # Importação dinâmica dentro do método
-        from formulario import FormularioFisioterapia
+        from client.ui.formulario import FormularioFisioterapia
         
         # Inicializar aba de clientes e formulário
         self.aba_clientes = AbaClientes(self.notebook)

@@ -1,0 +1,20 @@
+{
+    "admin": {
+        "nome": "Administrador",
+        "senha": "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9",
+        "perfil": "medico",
+        "ultimo_acesso": null
+    },
+    "medico": {
+        "nome": "Dr. Jo\u00e3o Silva",
+        "senha": "673ab82a6530ee3bd9b04ee72a4d66afa7fa059aedc685cf44e35d29d90ebafa",
+        "perfil": "medico",
+        "ultimo_acesso": null
+    },
+    "recepcao": {
+        "nome": "Maria Souza",
+        "senha": "2b2f7d1f89222d7211f2befb172fa7267c44ef66f9e074a7902dc39ce7c829a2",
+        "perfil": "recepcionista",
+        "ultimo_acesso": null
+    }
+}
