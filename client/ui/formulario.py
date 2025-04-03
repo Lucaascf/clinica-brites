@@ -89,152 +89,317 @@ class DateEntryImproved(DateEntry):
 
 
 
-class CampoTextoAutoExpansivel(tk.Frame):
-    def __init__(self, master=None, **kwargs):
-        """Inicializa o widget com um campo de texto que auto-expande"""
-        # Definir limite máximo de caracteres (padrão 1500)
-        self.max_caracteres = kwargs.pop("max_caracteres", 1500)
-        
-        # Resto do código de inicialização mantido igual
+class EditableLabel(tk.Frame):
+    def __init__(
+        self,
+        master,
+        min_lines=3,
+        width=None,
+        max_chars=None,
+        placeholder=None,
+        placeholder_color=PLACEHOLDER_COLOR,
+        font=("Courier New", 10),  # Fonte monoespaçada padrão
+        **kwargs
+    ):
         super().__init__(master)
         
-        # Extrair e remover argumentos específicos deste widget
-        self.largura = kwargs.pop("width", 100)
-        self.altura_inicial = kwargs.pop("height", 1)  # Começar com altura de 1 linha
-        self.altura_maxima = kwargs.pop("max_height", 100)  # Altura máxima pode ser bem grande
-        self.cor_fundo = kwargs.pop("bg", CORES["campo_bg"])
-        self.cor_placeholder = kwargs.pop("placeholder_color", PLACEHOLDER_COLOR)
-        self.texto_placeholder = kwargs.pop("placeholder", "")
-        self.font = kwargs.pop("font", FONTES["campo"])
+        # Ajuste automático do width se max_chars existir
+        if max_chars is not None and width is None:
+            width = max_chars + 2  # Margem de segurança
         
-        # Configurar o estilo do frame com bordas arredondadas
-        self.configure(
-            highlightthickness=1, 
-            highlightbackground="#cccccc", 
-            highlightcolor=CORES["secundaria"],
-            bg=self.cor_fundo,
-            bd=0,
-            padx=2,
-            pady=2
-        )
+        self.max_chars = max_chars
+        self.placeholder = placeholder
+        self.placeholder_color = placeholder_color
         
-        # Configurar padrões para o Text widget
-        kwargs.setdefault("wrap", "word")
-        kwargs.setdefault("relief", "flat")
-        kwargs.setdefault("padx", 8)
-        kwargs.setdefault("pady", 8)
-        kwargs.setdefault("bg", self.cor_fundo)
-        kwargs.setdefault("font", self.font)
-        
-        # Criar e configurar o campo de texto
-        self.texto = tk.Text(
-            self, 
-            width=50,  # Largura fixa de 50 caracteres 
-            height=self.altura_inicial,
-            highlightthickness=0,
+        # Configurações do widget Text com a fonte
+        self.text = tk.Text(
+            self,
+            wrap=tk.WORD,
+            height=min_lines,
+            width=width,
+            font=font,  # Aplica a fonte aqui
+            padx=5,
+            pady=5,
+            relief=tk.FLAT,
+            highlightthickness=1,
+            highlightbackground="#d3d3d3",
+            highlightcolor="#4a90d9",
             **kwargs
         )
-        self.texto.pack(fill=tk.BOTH, expand=True)
         
-        # Inserir placeholder se definido
-        if self.texto_placeholder:
-            self.texto.insert("1.0", self.texto_placeholder)
-            self.texto.config(fg=self.cor_placeholder)
-            self.has_placeholder = True
+        # Barra de rolagem
+        self.scrollbar = tk.Scrollbar(self, command=self.text.yview)
+        self.text.config(yscrollcommand=self.scrollbar.set)
+        
+        # Layout
+        self.text.grid(row=0, column=0, sticky="nsew")
+        self.scrollbar.grid(row=0, column=1, sticky="ns")
+        self.scrollbar.grid_remove()
+        
+        # Configuração de grid
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+        
+        # Configuração de eventos
+        self.text.bind("<FocusIn>", self._on_focus_in)
+        self.text.bind("<FocusOut>", self._on_focus_out)
+        self.text.bind("<Key>", lambda e: self.after(10, self._update_scrollbar))
+        
+        # Se max_chars não for None, adicionar validação
+        if self.max_chars is not None:
+            self.text.bind("<KeyPress>", self._check_limit)
+        
+        # Controle de foco e eventos de scroll
+        self._has_focus = False
+        self.text.bind("<FocusIn>", self._set_focus_true, add="+")
+        self.text.bind("<FocusOut>", self._set_focus_false, add="+")
+        
+        # Bindings de scroll são ativados/desativados conforme o foco
+        self._setup_scroll_bindings()
+        
+        # Identificador do binding para poder removê-lo quando necessário
+        self.binding_id = None
+        
+        # Configurar evento quando o texto recebe foco
+        self.text.bind("<FocusIn>", self._on_text_focus_in, add="+")
+        
+        # Configurar placeholder se fornecido
+        if self.placeholder:
+            self.text.insert('1.0', self.placeholder)
+            self.text.config(fg=self.placeholder_color)
+            
+            # Bind eventos para o comportamento do placeholder
+            self.text.bind('<FocusIn>', self._on_focus_in_placeholder, add="+")
+            self.text.bind('<FocusOut>', self._on_focus_out_placeholder, add="+")
+    
+    def _on_focus_in_placeholder(self, event):
+        if self.text.get('1.0', 'end-1c') == self.placeholder:
+            self.text.delete('1.0', tk.END)
+            self.text.config(fg='black')
+
+    def _on_focus_out_placeholder(self, event):
+        if not self.text.get('1.0', 'end-1c'):
+            self.text.insert('1.0', self.placeholder)
+            self.text.config(fg=self.placeholder_color)
+
+    def _check_limit(self, event):
+        """Verifica se o texto excede o limite de caracteres"""
+        # Se for uma tecla especial (como setas, backspace, etc), não fazemos nada
+        if event.keysym in ('BackSpace', 'Delete', 'Left', 'Right', 'Up', 'Down', 'Tab', 'Home', 'End', 'Return'):
+            return
+        
+        # Verificar comprimento atual
+        current_text = self.text.get('1.0', 'end-1c')
+        if len(current_text) >= self.max_chars:
+            return "break"  # Impede a inserção de mais caracteres
+    
+    def _set_focus_true(self, event):
+        """Marca o campo como tendo foco"""
+        self._has_focus = True
+        self._setup_scroll_bindings()
+    
+    def _set_focus_false(self, event):
+        """Marca o campo como não tendo foco"""
+        self._has_focus = False
+        self._setup_scroll_bindings()
+    
+    def _setup_scroll_bindings(self):
+        """Configura os bindings de scroll baseado no estado de foco"""
+        # Primeiro remove qualquer binding existente
+        self.text.unbind("<MouseWheel>")
+        self.text.unbind("<Button-4>")
+        self.text.unbind("<Button-5>")
+        
+        # Se o campo tem foco, adiciona os bindings para scroll
+        if self._has_focus:
+            self.text.bind("<MouseWheel>", self._on_mouse_scroll)
+            self.text.bind("<Button-4>", self._on_scroll_up)
+            self.text.bind("<Button-5>", self._on_scroll_down)
         else:
-            self.has_placeholder = False
-        
-        # Vincular eventos para ajuste automático de tamanho e limite de caracteres
-        self.texto.bind("<KeyRelease>", self._ajustar_altura_e_limite)
-        self.texto.bind("<FocusIn>", self._ao_receber_foco)
-        self.texto.bind("<FocusOut>", self._ao_perder_foco)
+            # Quando não tem foco, bloqueia o scroll no campo e repassa para o formulário principal
+            self.text.bind("<MouseWheel>", self._pass_scroll_to_parent)
+            self.text.bind("<Button-4>", self._pass_scroll_up_to_parent)
+            self.text.bind("<Button-5>", self._pass_scroll_down_to_parent)
     
-    def _ajustar_altura_e_limite(self, evento=None):
-        """Ajusta a altura do widget e limita o número de caracteres"""
-        # Obter texto atual
-        texto_atual = self.texto.get("1.0", "end-1c")
+    def _pass_scroll_to_parent(self, event):
+        """Repassa o scroll para o formulário principal"""
+        self.winfo_toplevel().event_generate("<MouseWheel>", 
+                                           delta=event.delta,
+                                           x=event.x_root, 
+                                           y=event.y_root)
+        return "break"  # Bloqueia o scroll no campo
+    
+    def _pass_scroll_up_to_parent(self, event):
+        """Repassa o scroll para cima para o formulário principal (Linux)"""
+        self.winfo_toplevel().event_generate("<Button-4>", 
+                                           x=event.x_root, 
+                                           y=event.y_root)
+        return "break"  # Bloqueia o scroll no campo
+    
+    def _pass_scroll_down_to_parent(self, event):
+        """Repassa o scroll para baixo para o formulário principal (Linux)"""
+        self.winfo_toplevel().event_generate("<Button-5>", 
+                                           x=event.x_root, 
+                                           y=event.y_root)
+        return "break"  # Bloqueia o scroll no campo
+    
+    def _on_text_focus_in(self, event):
+        """Quando o texto recebe foco, configuramos o binding global"""
+        # Remove binding anterior se existir
+        if self.binding_id:
+            self.winfo_toplevel().unbind("<Button-1>", self.binding_id)
         
-        # Limitar número de caracteres
-        if len(texto_atual) > self.max_caracteres:
-            # Truncar texto
-            self.texto.delete("1.0", "end")
-            self.texto.insert("1.0", texto_atual[:self.max_caracteres])
+        # Adiciona novo binding
+        self.binding_id = self.winfo_toplevel().bind("<Button-1>", self._handle_global_click, add="+")
+    
+    def _handle_global_click(self, event):
+        """Trata cliques em qualquer lugar da aplicação"""
+        click_widget = event.widget
+        
+        # Se o clique foi em outro widget Text, não faz nada (permite que o foco mude)
+        if isinstance(click_widget, tk.Text):
+            return
             
-            # Mostrar aviso de forma não bloqueante
-            self.after(100, lambda: messagebox.showwarning(
-                "Limite de Caracteres", 
-                f"O limite máximo de {self.max_caracteres} caracteres foi atingido.",
-                icon='warning'
-            ))
+        # Se o clique não foi no texto nem em seus filhos
+        # E o texto está com foco, remove o foco
+        if self.text.focus_displayof() and click_widget != self.text:
+            # Verifica também se não é um filho do widget de texto
+            parent = click_widget
+            is_child = False
+            
+            # Verifica a hierarquia de widgets
+            while parent and not is_child:
+                if parent == self.text:
+                    is_child = True
+                    break
+                try:
+                    parent = parent.master
+                except:
+                    break
+            
+            # Se não for filho, remove o foco
+            if not is_child:
+                # Apenas remove o foco do texto
+                self.master.focus_set()
+    
+    def _on_focus_in(self, event=None):
+        """Quando o campo ganha foco"""
+        self.text.config(highlightbackground="#4a90d9")
+    
+    def _on_focus_out(self, event=None):
+        """Quando o campo perde foco"""
+        self.text.config(highlightbackground="#d3d3d3")
+    
+    def _on_mouse_scroll(self, event):
+        """Scroll do mouse (Windows/MacOS)"""
+        self.text.yview_scroll(-1 * (event.delta // 120), "units")
+        return "break"  # Impede a propagação
+    
+    def _on_scroll_up(self, event):
+        """Scroll para cima (Linux)"""
+        self.text.yview_scroll(-1, "units")
+        return "break"  # Impede a propagação
+    
+    def _on_scroll_down(self, event):
+        """Scroll para baixo (Linux)"""
+        self.text.yview_scroll(1, "units")
+        return "break"  # Impede a propagação
+    
+    def _update_scrollbar(self):
+        """Atualiza a visibilidade da scrollbar"""
+        if self.text.yview() != (0.0, 1.0):
+            self.scrollbar.grid()
+        else:
+            self.scrollbar.grid_remove()
+    
+    def get(self):
+        """Retorna o texto sem a quebra de linha final"""
+        return self.text.get('1.0', 'end-1c')
+    
+    def insert(self, index, text):
+        """Insere texto no campo"""
+        self.text.insert(index, text)
+        self._update_scrollbar()
+    
+    def delete(self, start, end):
+        """Remove texto do campo"""
+        self.text.delete(start, end)
+        self._update_scrollbar()
+
+
+
+class CampoTextoAutoExpansivel(tk.Frame):
+    def __init__(self, master=None, **kwargs):
+        # Extrai parâmetros específicos antes de passar para o Frame
+        self.max_caracteres = kwargs.pop("max_caracteres", 1000000)
+        self.largura = kwargs.pop("width", 40)
+        self.altura_inicial = kwargs.pop("height", 1)
+        self.altura_maxima = kwargs.pop("max_height", 0)
+        self.cor_fundo = kwargs.pop("bg", "white")
+        placeholder_text = kwargs.pop("placeholder", None)
+        placeholder_color = kwargs.pop("placeholder_color", PLACEHOLDER_COLOR)
+
+        # Inicializa o Frame pai
+        super().__init__(master, bg=self.cor_fundo, **kwargs)
+
+        # Configurações padrão para o widget Text
+        text_kwargs = {
+            "wrap": "word",
+            "width": self.largura,
+            "height": self.altura_inicial,
+            "bg": self.cor_fundo,
+            "highlightthickness": 0,
+            "font": FONTES["campo"]
+        }
+
+        # Cria o widget Text
+        self.texto = tk.Text(self, **text_kwargs)
+        self.texto.pack(fill=tk.X, expand=False)
+
+        # Configura placeholder se fornecido
+        if placeholder_text:
+            self.texto.insert('1.0', placeholder_text)
+            self.texto.config(fg=placeholder_color)
+            
+            def on_focus_in(event):
+                if self.texto.get('1.0', 'end-1c') == placeholder_text:
+                    self.texto.delete('1.0', tk.END)
+                    self.texto.config(fg='black')
+            
+            def on_focus_out(event):
+                if not self.texto.get('1.0', 'end-1c'):
+                    self.texto.insert('1.0', placeholder_text)
+                    self.texto.config(fg=placeholder_color)
+            
+            self.texto.bind('<FocusIn>', on_focus_in)
+            self.texto.bind('<FocusOut>', on_focus_out)
+
+        # Configura eventos para auto-ajuste
+        self.texto.bind('<KeyRelease>', self._ajustar_altura)
+        self.texto.bind('<Configure>', self._ajustar_altura)
         
-        # Obter número de linhas pelo índice da última linha
-        num_linhas = int(self.texto.index('end-1c').split('.')[0])
+        # Ajuste inicial
+        self.after(10, self._ajustar_altura)
+
+    def _ajustar_altura(self, event=None):
+        """Ajusta a altura do widget conforme o conteúdo"""
+        num_linhas = self.texto.count('1.0', 'end', 'displaylines')[0]
         
-        # Ajustar altura garantindo que seja pelo menos 1 linha
-        altura_ajustada = max(num_linhas, 1)
-        
-        # Limitar a altura máxima se definida
         if self.altura_maxima > 0:
-            altura_ajustada = min(altura_ajustada, self.altura_maxima)
+            num_linhas = min(num_linhas, self.altura_maxima)
         
-        # Configurar a nova altura
-        self.texto.configure(height=altura_ajustada)
-        
-        # Atualizar visualização
+        self.texto.config(height=num_linhas)
         self.update_idletasks()
-    
-    def _ao_receber_foco(self, evento=None):
-        """Altera a aparência quando o campo recebe foco"""
-        self.configure(highlightbackground="#3498db", highlightthickness=2)
-        
-        # Limpar placeholder se necessário
-        if self.has_placeholder and self.texto.get("1.0", "end-1c") == self.texto_placeholder:
-            self.texto.delete("1.0", "end")
-            self.texto.config(fg="black")
-            self.has_placeholder = False
-    
-    def _ao_perder_foco(self, evento=None):
-        """Altera a aparência quando o campo perde foco e ajusta a altura"""
-        self.configure(highlightbackground="#cccccc", highlightthickness=1)
-        
-        # Restaurar placeholder se o campo estiver vazio
-        if not self.texto.get("1.0", "end-1c") and self.texto_placeholder:
-            self.texto.insert("1.0", self.texto_placeholder)
-            self.texto.config(fg=self.cor_placeholder)
-            self.has_placeholder = True
-            
-        self._ajustar_altura_e_limite()
-    
+
     def obter(self):
-        """Retorna o texto atual (excluindo placeholder)"""
-        if self.has_placeholder:
-            return ""
-        return self.texto.get("1.0", "end-1c")
-    
-    def definir(self, texto):
-        """Define o texto e ajusta a altura"""
-        self.texto.delete("1.0", "end")
-        if texto:
-            # Truncar texto se exceder o limite
-            texto = texto[:self.max_caracteres]
-            
-            self.texto.insert("1.0", texto)
-            self.texto.config(fg="black")
-            self.has_placeholder = False
-        elif self.texto_placeholder:
-            self.texto.insert("1.0", self.texto_placeholder)
-            self.texto.config(fg=self.cor_placeholder)
-            self.has_placeholder = True
-        self._ajustar_altura_e_limite()
-    
+        """Retorna o conteúdo do campo"""
+        return self.texto.get('1.0', 'end-1c')
+
     def limpar(self):
-        """Limpa o campo de texto"""
-        self.texto.delete("1.0", "end")
-        if self.texto_placeholder:
-            self.texto.insert("1.0", self.texto_placeholder)
-            self.texto.config(fg=self.cor_placeholder)
-            self.has_placeholder = True
-        self._ajustar_altura_e_limite()
+        """Limpa o conteúdo do campo"""
+        self.texto.delete('1.0', tk.END)
+
+
 
 class FormularioFisioterapia:
     """
@@ -266,7 +431,26 @@ class FormularioFisioterapia:
         
         # Configurar o formulário
         self.configurar_formulario()
-    
+
+        self.aplicar_ajustes_todos_campos()
+
+        self.configurar_campos_expansiveis()
+
+    def configurar_campos_expansiveis(self):
+        """Configura todos os campos para expandir adequadamente com 1500 caracteres"""
+        # Iterar por todos os campos do formulário
+        for nome_campo, campo in self.campos.items():
+            # Verificar se é um campo de texto expansível
+            if hasattr(campo, 'texto'):
+                # Definir limite máximo de caracteres para 1500
+                campo.max_caracteres = 1000000
+                
+                # Desativar limite de altura para permitir que cresça quanto necessário
+                campo.altura_maxima = 0  # 0 significa sem limite
+                
+                # Forçar recálculo da altura
+                campo._ajustar_altura()
+
     def criar_sistema_rolagem(self):
         """Cria o sistema de rolagem para o formulário"""
         # Frame principal com rolagem
@@ -377,6 +561,57 @@ class FormularioFisioterapia:
         # Botões de ação
         self.criar_botoes_acao(linha)
 
+    def aplicar_ajustes_todos_campos(self):
+        """
+        Aplica os ajustes necessários em todos os campos do formulário
+        para garantir layout correto.
+        """
+        # Verificar cada campo do formulário
+        for nome_campo, campo in self.campos.items():
+            # Se for um CampoTextoAutoExpansivel
+            if hasattr(campo, 'texto'):
+                # Garantir que a largura seja fixa e a quebra de linha esteja ativada
+                campo.texto.config(wrap="word", width=campo.largura)
+                
+                # Aplicar ajuste de altura
+                if hasattr(campo, '_ajustar_altura'):
+                    campo._ajustar_altura()
+        
+        # Atualizar a interface
+        self.frame.update_idletasks()
+
+
+
+    def aplicar_ajustes_todos_campos(self):
+        """
+        Aplica ajustes a todos os campos do formulário para garantir que funcionem
+        corretamente com a expansão vertical a partir de uma linha.
+        """
+        for nome_campo, campo in self.campos.items():
+            if hasattr(campo, 'texto'):
+                # Forçar altura inicial de 1 linha
+                campo.altura_inicial = 1
+                
+                # Garantir wrap por palavra e largura fixa
+                campo.texto.config(wrap="word", width=campo.largura)
+                
+                # Reajustar altura com base no conteúdo atual
+                campo._ajustar_altura()
+        
+        # Atualizar todo o formulário
+        self.frame.update_idletasks()
+
+    def ajustar_campos_vitais(self):
+        """Ajusta os campos de parâmetros vitais para garantir altura correta"""
+        campos_vitais = ["PA", "Pulso", "Talla", "Peso", "T", "FR", "Sat.O2"]
+        for nome in campos_vitais:
+            if nome in self.campos:
+                campo = self.campos[nome]
+                if hasattr(campo, 'texto'):
+                    # Definir uma altura fixa para estes campos
+                    campo.texto.configure(height=2)
+                    campo.update_idletasks()
+
     def _carregar_aba_sob_demanda(self, evento=None):
         """Carrega o conteúdo da aba somente quando ela é selecionada, com otimização"""
         tab_id = self.notebook_avaliacao.select()
@@ -411,6 +646,9 @@ class FormularioFisioterapia:
                     # Determinar qual método de criação chamar
                     if key == 'evaluacion_fisica':
                         self.criar_secao_evaluacion_fisica(frame)
+                        # Agendar o ajuste dos campos vitais na thread principal
+                        if frame.winfo_exists():
+                            frame.after(100, self.ajustar_campos_vitais)
                     elif key == 'pruebas_especificas':
                         self.criar_secao_pruebas_especificas(frame)
                     elif key == 'mediciones_escalas':
@@ -428,6 +666,7 @@ class FormularioFisioterapia:
                         
                     # Marcar como carregado
                     self.frames_avaliacao[key]['carregado'] = True
+                    self.aplicar_ajustes_todos_campos()
                 except Exception as e:
                     print(f"Erro ao carregar aba {key}: {e}")
             
@@ -466,7 +705,7 @@ class FormularioFisioterapia:
         label_data.pack(side=tk.RIGHT, padx=20)
     
     def criar_secao_historial_paciente(self, linha_inicio):
-        """Cria a seção de Histórico do Paciente com layout ajustado"""
+        """Versão modificada de criar_secao_historial_paciente com suporte a 1500 caracteres"""
         linha = linha_inicio
         
         # Frame da seção (com borda e sombra)
@@ -515,18 +754,24 @@ class FormularioFisioterapia:
             font=FONTES["campo"]
         )
         label_nome.grid(row=0, column=0, padx=(0, 5), pady=(0, 10), sticky="w")
-        
-        campo_nome = CampoTextoAutoExpansivel(
-            frame_conteudo_secao, 
-            width=50, 
-            height=1, 
-            max_height=3, 
-            bg=self.cores["campo_bg"],
-            placeholder="Ingrese nombre completo..."
+
+        # Substituir por EditableLabel da forma mais simples
+        campo_nome = EditableLabel(
+            frame_conteudo_secao,
+            min_lines=1,
+            width=50,
+            max_chars=100,
+            placeholder='Ingrese Nombre Completo...',
+            placeholder_color=PLACEHOLDER_COLOR,
+            bg="#ffffff"
         )
         campo_nome.grid(row=0, column=1, columnspan=3, padx=0, pady=(0, 10), sticky="ew")
-        campo_nome.texto.bind("<KeyRelease>", lambda e: self.marcar_modificado())
-        self.campos["Nombre Completo"] = campo_nome
+
+        # Evento de modificação
+        campo_nome.text.bind("<KeyRelease>", lambda e: self.marcar_modificado())
+
+        # Armazenar a referência ao widget Text
+        self.campos["Nombre Completo"] = campo_nome.text
         
         # --- SEGUNDA LINHA: IDADE E GÊNERO ---
         # Idade
@@ -539,17 +784,18 @@ class FormularioFisioterapia:
         )
         label_idade.grid(row=1, column=0, padx=(0, 5), pady=(0, 10), sticky="w")
         
-        campo_idade = CampoTextoAutoExpansivel(
-            frame_conteudo_secao, 
-            width=10, 
-            height=1, 
-            max_height=1, 
+        campo_idade = EditableLabel(
+            frame_conteudo_secao,
+            min_lines=1,
+            width=10,  
+            max_chars=3, 
             bg=self.cores["campo_bg"],
-            placeholder="Ingrese edad..."
+            placeholder="Edad",
+            placeholder_color=PLACEHOLDER_COLOR
         )
         campo_idade.grid(row=1, column=1, padx=(0, 20), pady=(0, 10), sticky="w")
-        campo_idade.texto.bind("<KeyRelease>", lambda e: self.marcar_modificado())
-        self.campos["Edad"] = campo_idade
+        campo_idade.text.bind("<KeyRelease>", lambda e: self.marcar_modificado())
+        self.campos["Edad"] = campo_idade.text
         
         # Gênero (diretamente ao lado da idade)
         label_genero = tk.Label(
@@ -560,18 +806,32 @@ class FormularioFisioterapia:
             font=FONTES["campo"]
         )
         label_genero.grid(row=1, column=2, padx=(0, 5), pady=(0, 10), sticky="w")
-        
-        campo_genero = CampoTextoAutoExpansivel(
-            frame_conteudo_secao, 
-            width=20, 
-            height=1, 
-            max_height=1, 
-            bg=self.cores["campo_bg"],
-            placeholder="Ingrese genero..."
+
+        # Criar uma variável para armazenar o valor selecionado
+        var_genero = tk.StringVar()
+
+        # Opções para gênero (apenas Masculino e Femenino)
+        opcoes_genero = ["Masculino", "Femenino"]
+
+        # Configuração simples para remover o azul
+        style = ttk.Style()
+        style.map('TCombobox', selectbackground=[('readonly', 'white')], selectforeground=[('readonly', 'black')])
+
+        # Criar combobox
+        campo_genero = ttk.Combobox(
+            frame_conteudo_secao,
+            textvariable=var_genero,
+            values=opcoes_genero,
+            width=15,
+            state="readonly"  # Impede que o usuário digite, só pode selecionar
         )
-        campo_genero.grid(row=1, column=3, padx=0, pady=(0, 10), sticky="ew")
-        campo_genero.texto.bind("<KeyRelease>", lambda e: self.marcar_modificado())
-        self.campos["Genero"] = campo_genero
+        campo_genero.grid(row=1, column=3, padx=0, pady=(0, 10), sticky="w")
+
+        # Associar evento de alteração
+        campo_genero.bind("<<ComboboxSelected>>", lambda e: self.marcar_modificado())
+
+        # Armazenar a referência no dicionário - agora é a variável, não o widget
+        self.campos["Genero"] = var_genero
         
         # --- TERCEIRA LINHA: CONTATO E DATA DE NASCIMENTO ---
         # Contato
@@ -584,17 +844,17 @@ class FormularioFisioterapia:
         )
         label_contato.grid(row=2, column=0, padx=(0, 5), pady=(0, 10), sticky="w")
         
-        campo_contato = CampoTextoAutoExpansivel(
-            frame_conteudo_secao, 
-            width=30, 
-            height=1, 
-            max_height=1, 
+        campo_contato = EditableLabel(
+            frame_conteudo_secao,
+            max_chars=30,  # O width será calculado automaticamente (30 + 2)
+            min_lines=1,
             bg=self.cores["campo_bg"],
-            placeholder="Ingrese contacto..."
+            placeholder="Ingrese contacto...",
+            placeholder_color=PLACEHOLDER_COLOR
         )
         campo_contato.grid(row=2, column=1, padx=(0, 20), pady=(0, 10), sticky="ew")
-        campo_contato.texto.bind("<KeyRelease>", lambda e: self.marcar_modificado())
-        self.campos["Contacto"] = campo_contato
+        campo_contato.text.bind("<KeyRelease>", lambda e: self.marcar_modificado())
+        self.campos["Contacto"] = campo_contato.text
         
         # Data de nascimento (imediatamente após o contato)
         label_data = tk.Label(
@@ -646,26 +906,33 @@ class FormularioFisioterapia:
             text="Alergias", 
             bg=self.cores["secao_bg"],
             fg=self.cores["texto_destaque"],
-            font=FONTES["campo"]
+            font=FONTES["campo"],
+            anchor="w"
         )
         label_alergias.grid(row=4, column=0, padx=(0, 5), pady=0, sticky="nw")
-        
-        campo_alergias = CampoTextoAutoExpansivel(
-            frame_conteudo_secao, 
-            width=90, 
-            height=3, 
-            max_height=15, 
+
+        # Cria o campo com 3 linhas fixas
+        campo_alergias = EditableLabel(
+            frame_conteudo_secao,
+            min_lines=3,
+            width=90,
             bg=self.cores["campo_bg"],
-            placeholder="Ingrese alergias..."
+            font=FONTES["campo"]
         )
-        campo_alergias.grid(row=4, column=1, columnspan=3, padx=0, pady=0, sticky="ew")
-        campo_alergias.texto.bind("<KeyRelease>", lambda e: self.marcar_modificado())
-        self.campos["Alergias"] = campo_alergias
-        
+
+        # Posicionamento (como antes)
+        campo_alergias.grid(row=4, column=1, columnspan=3, padx=0, pady=0, sticky="nsew")
+
+        # Para vincular eventos (agora mais simples)
+        campo_alergias.text.bind("<KeyRelease>", lambda e: self.marcar_modificado())
+
+        # Para acessar o valor
+        self.campos["Alergias"] = campo_alergias.text
+                
         return linha
     
     def criar_secao_historia_clinica(self, linha_inicio):
-        """Cria a seção de História Clínica"""
+        """Versão modificada de criar_secao_historia_clinica com suporte a 1500 caracteres"""
         linha = linha_inicio
         
         # Frame da seção
@@ -710,7 +977,7 @@ class FormularioFisioterapia:
             ("Medicamentos actuales", 4)
         ]
         
-        # Criar campos com mais altura e largura para suportar mais conteúdo
+        # Criar campos com mais altura e largura para suportar até 1500 caracteres
         for campo, linha_local in campos:
             # Label com width fixo para manter alinhamento
             label = tk.Label(
@@ -724,15 +991,16 @@ class FormularioFisioterapia:
             )
             label.grid(row=linha_local, column=0, padx=5, pady=8, sticky="nw")
             
-            # Campo de texto expansível
+            # Campo de texto expansível configurado para 1500 caracteres
             campo_texto = CampoTextoAutoExpansivel(
                 frame_conteudo_secao, 
                 width=50,  # Largura inicial
                 height=1,  # Altura inicial 
-                max_height=10,  # Altura máxima 
+                max_height=0,  # Sem limite de altura (o 0 significa sem limite)
                 bg=self.cores["campo_bg"],
                 placeholder=f"Ingrese {campo.lower()}...",
-                placeholder_color="#AAAAAA"
+                placeholder_color="#AAAAAA",
+                max_caracteres=1500  # Configurar para 1500 caracteres
             )
             campo_texto.grid(row=linha_local, column=1, padx=5, pady=8, sticky="ew")
             
@@ -882,10 +1150,11 @@ class FormularioFisioterapia:
         # 1.1 Título da Inspeção
         label_titulo_inspeccion = tk.Label(
             frame_inspeccion, 
-            text="1. Inspección", 
+            text="1. Inspección",
             bg=self.cores["secao_bg"],
             fg="#ffffff",
-            font=FONTES["secao"]
+            font=FONTES["secao"],
+            anchor="w"  # Adiciona alinhamento à esquerda
         )
         label_titulo_inspeccion.grid(row=0, column=0, columnspan=2, padx=5, pady=(5, 30), sticky="w")
 
@@ -1443,7 +1712,7 @@ class FormularioFisioterapia:
             self.campos[campo] = campo_texto
         
     def criar_secao_pruebas_especificas(self, frame_pai):
-        """Cria a seção de Testes Específicos"""
+        """Cria a seção de Testes Específicos com cards usando EditableLabel"""
         # Frame da seção é o próprio frame_pai
         frame_secao = frame_pai
         
@@ -1460,13 +1729,14 @@ class FormularioFisioterapia:
         )
         titulo.pack(side=tk.LEFT, padx=15, pady=10)
         
-        # Conteúdo da seção com visual de cards
+        # Frame container para os cards
         frame_conteudo_secao = tk.Frame(frame_secao, bg=self.cores["secao_bg"])
         frame_conteudo_secao.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
         
-        # Configurar colunas para layout em grade
-        for i in range(3):  # 3 colunas para os cards
-            frame_conteudo_secao.columnconfigure(i, weight=1)
+        # Configurar grid
+        frame_conteudo_secao.grid_rowconfigure(0, weight=1)
+        for i in range(3):  # 3 colunas
+            frame_conteudo_secao.columnconfigure(i, weight=1, uniform="cols")
         
         # Criar três cards lado a lado
         campos = [
@@ -1477,40 +1747,54 @@ class FormularioFisioterapia:
         
         for campo, col in campos:
             # Frame do card
-            card = tk.Frame(frame_conteudo_secao, bg=self.cores["secao_bg"], padx=5, pady=5)
+            card = tk.Frame(
+                frame_conteudo_secao,
+                bg=self.cores["campo_bg"],
+                highlightbackground="#d3d3d3",
+                highlightthickness=1,
+                padx=10,
+                pady=10
+            )
             card.grid(row=0, column=col, padx=5, pady=5, sticky="nsew")
             
-            # Título do card como texto externo
+            # Título do card
             label = tk.Label(
                 card, 
                 text=campo, 
-                bg=self.cores["secao_bg"],
+                bg=self.cores["campo_bg"],
                 fg=self.cores["texto_destaque"],
                 font=FONTES["cabecalho_card"]
             )
-            label.pack(anchor="w", padx=5, pady=5)
+            label.pack(anchor="w", padx=5, pady=(0, 10))
             
-            # Campo de texto com altura maior
-            campo_texto = CampoTextoAutoExpansivel(
-                card, 
+            # Campo de texto usando EditableLabel
+            campo_texto = EditableLabel(
+                card,
+                min_lines=10,  # Altura mínima maior para ter mais espaço
                 width=30,
-                height=5,
-                max_height=10,
-                bg=self.cores["campo_bg"],
-                placeholder=f"Detalles de {campo.lower()}..."
+                bg=self.cores["campo_bg"]
             )
-            campo_texto.pack(fill=tk.X, expand=True, padx=5, pady=5)
+            campo_texto.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
             
-            # Vincular evento de modificação
-            campo_texto.texto.bind("<KeyRelease>", lambda e: self.marcar_modificado())
+            # Importante: o text attribute é o widget Text dentro do EditableLabel
+            campo_texto.text.insert('1.0', f"")
+            campo_texto.text.config(wrap=tk.WORD)  # Garantir quebra de linha por palavra
             
-            # Armazenar referência ao campo
-            self.campos[campo] = campo_texto
+            # Armazenar referência ao widget Text do EditableLabel, não ao EditableLabel em si
+            self.campos[campo] = campo_texto.text
+            
+            # Vincular evento de modificação ao widget Text
+            campo_texto.text.bind("<KeyRelease>", lambda e: self.marcar_modificado())
+                
         
     def criar_secao_mediciones_escalas(self, frame_pai):
-        """Cria a seção de Medições e Escalas"""
+        """Cria a seção de Medições e Escalas com layout compactado - apenas EVA"""
         # Frame da seção é o próprio frame_pai
         frame_secao = frame_pai
+        
+        # Limpar qualquer conteúdo existente no frame_pai
+        for widget in frame_secao.winfo_children():
+            widget.destroy()
         
         # Título da seção
         frame_titulo = tk.Frame(frame_secao, bg=self.cores["titulo_bg"])
@@ -1525,131 +1809,122 @@ class FormularioFisioterapia:
         )
         titulo.pack(side=tk.LEFT, padx=15, pady=10)
         
-        # Conteúdo da seção - remover conteúdo duplicado
-        frame_conteudo_secao = tk.Frame(frame_secao, bg=self.cores["secao_bg"])
-        frame_conteudo_secao.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
+        # Usar um único frame para todo o conteúdo
+        frame_conteudo = tk.Frame(frame_secao, bg=self.cores["secao_bg"])
+        frame_conteudo.pack(fill=tk.BOTH, expand=True, padx=15, pady=0)
         
-        # Frame para a escala EVA com visual moderno
-        frame_eva_container = tk.Frame(frame_conteudo_secao, bg=self.cores["secao_bg"], padx=10, pady=10)
-        frame_eva_container.pack(fill=tk.X, expand=True, padx=5, pady=5)
+        # Configuração de grid para melhor controle do layout
+        frame_conteudo.columnconfigure(0, weight=1)
         
-        # Label principal como texto externo
-        label_principal = tk.Label(
-            frame_eva_container, 
+        # ================ ESCALA EVA ================
+        # Título EVA - posicionamento imediato após o título principal
+        label_eva = tk.Label(
+            frame_conteudo, 
             text="(EVA) Escala Visual Analógica del Dolor", 
             bg=self.cores["secao_bg"],
             fg=self.cores["texto_destaque"],
-            font=('Segoe UI', 16, 'bold')  # Aumentado para 16
+            font=('Segoe UI', 16, 'bold')
         )
-        label_principal.pack(anchor="w", padx=5, pady=5)
+        label_eva.grid(row=0, column=0, sticky="w", padx=5, pady=(10, 0))
         
-        # Descrição da escala
+        # Descrição
         descricao = tk.Label(
-            frame_eva_container,
+            frame_conteudo,
             text="Seleccione el nivel de dolor del paciente en la escala de 0 a 10:",
             bg=self.cores["secao_bg"],
             fg=self.cores["texto_destaque"],
             font=FONTES["subsecao"]
         )
-        descricao.pack(anchor="w", padx=5, pady=5)
+        descricao.grid(row=1, column=0, sticky="w", padx=5, pady=(0, 0))
         
-        # Frame para a escala EVA com design melhorado
-        frame_eva = tk.Frame(frame_eva_container, bg=self.cores["secao_bg"])
-        frame_eva.pack(fill=tk.X, expand=True, padx=5, pady=10)
+        # Frame para labels de extremidades e escala (lado a lado)
+        frame_escala_completa = tk.Frame(frame_conteudo, bg=self.cores["secao_bg"])
+        frame_escala_completa.grid(row=2, column=0, sticky="ew", padx=5, pady=(0, 0))
         
-        # Labels para os extremos da escala
-        frame_legendas = tk.Frame(frame_eva, bg=self.cores["secao_bg"])
-        frame_legendas.pack(fill=tk.X, expand=True, padx=5, pady=0)
-        
+        # Legendas e escala em um layout horizontal
         label_zero = tk.Label(
-            frame_legendas, 
+            frame_escala_completa, 
             text="Sin dolor", 
             bg=self.cores["secao_bg"],
             fg=self.cores["texto_destaque"],
-            font=('Segoe UI', 14, 'bold')  # Aumentado para 14
+            font=('Segoe UI', 14, 'bold')
         )
-        label_zero.pack(side=tk.LEFT)
+        label_zero.pack(side=tk.LEFT, padx=(0, 10))
         
-        label_diez = tk.Label(
-            frame_legendas, 
-            text="Dolor máximo", 
-            bg=self.cores["secao_bg"],
-            fg=self.cores["texto_destaque"],
-            font=('Segoe UI', 14, 'bold')  # Aumentado para 14
-        )
-        label_diez.pack(side=tk.RIGHT)
-        
-        # Frame para a escala e valor
-        frame_escala_valor = tk.Frame(frame_eva, bg=self.cores["secao_bg"])
-        frame_escala_valor.pack(fill=tk.X, expand=True, padx=5, pady=5)
-        
-        # Criar escala visual usando Scale widget do tk
+        # Escala em si - configurada com comprimento maior
         var_escala = tk.DoubleVar()
         escala_eva = tk.Scale(
-            frame_escala_valor, 
+            frame_escala_completa, 
             from_=0, 
             to=10, 
             orient=tk.HORIZONTAL,
-            length=400,
+            length=600,  # Aumentado para ocupar mais espaço
             sliderlength=30,
-            showvalue=0,  # Não mostrar valor na escala
+            showvalue=0,
             resolution=1,
             variable=var_escala,
             bg=self.cores["secao_bg"],
             highlightthickness=0,
             troughcolor="#DDDDDD",
-            width=20,  # Aumentar largura do slider
+            width=20,
             activebackground=self.cores["secundaria"]
         )
-        escala_eva.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
+        escala_eva.pack(side=tk.LEFT, fill=tk.X, expand=True)
         
-        # Frame para valor com estilo
-        frame_valor = tk.Frame(frame_escala_valor, bg=self.cores["secao_bg"], padx=5, pady=5)
-        frame_valor.pack(side=tk.LEFT)
-        
-        # Label para mostrar o valor
+        # Valor numérico
         valor_eva = tk.Label(
-            frame_valor, 
+            frame_escala_completa, 
             text="0", 
             width=2, 
-            font=('Segoe UI', 18, 'bold'),  # Aumentado para 18
+            font=('Segoe UI', 18, 'bold'),
             bg=self.cores["secao_bg"],
             fg=self.cores["texto_destaque"]
         )
-        valor_eva.pack()
+        valor_eva.pack(side=tk.LEFT, padx=(10, 10))
+        
+        # Label máximo
+        label_max = tk.Label(
+            frame_escala_completa, 
+            text="Dolor máximo", 
+            bg=self.cores["secao_bg"],
+            fg=self.cores["texto_destaque"],
+            font=('Segoe UI', 14, 'bold')
+        )
+        label_max.pack(side=tk.LEFT)
         
         # Função para atualizar o valor
         def atualizar_valor_eva(evento):
             valor = int(escala_eva.get())
             valor_eva.config(text=str(valor))
             self.marcar_modificado()
-    
+
         escala_eva.bind("<Motion>", atualizar_valor_eva)
         escala_eva.bind("<ButtonRelease-1>", atualizar_valor_eva)
         
         # Armazenar referência
         self.campos["escala_eva"] = escala_eva
         
-        # Área para observações adicionais
+        # ================ OBSERVAÇÕES ================
+        # Label para observações - sem espaço excessivo
         label_observaciones = tk.Label(
-            frame_eva_container, 
+            frame_conteudo, 
             text="Observaciones adicionales sobre el dolor:", 
             bg=self.cores["secao_bg"],
             fg=self.cores["texto_destaque"],
-            font=('Segoe UI', 14)  # Aumentado para 14
+            font=('Segoe UI', 14)
         )
-        label_observaciones.pack(anchor="w", padx=5, pady=5)
+        label_observaciones.grid(row=3, column=0, sticky="w", padx=5, pady=(5, 0))
         
         # Campo de texto para observações
         observaciones = CampoTextoAutoExpansivel(
-            frame_eva_container, 
+            frame_conteudo, 
             width=80,
             height=3,
             max_height=6,
             bg=self.cores["campo_bg"],
             placeholder="Describa las características del dolor (tipo, localización, factores agravantes, etc.)"
         )
-        observaciones.pack(fill=tk.X, expand=True, padx=5, pady=5)
+        observaciones.grid(row=4, column=0, sticky="ew", padx=5, pady=(0, 5))
         
         # Vincular evento de modificação
         observaciones.texto.bind("<KeyRelease>", lambda e: self.marcar_modificado())
@@ -1713,12 +1988,16 @@ class FormularioFisioterapia:
             self.campos[campo] = campo_texto
     
     def criar_secao_plan_tratamiento(self, frame_pai):
-        """Cria a seção de Plano de Tratamento com botões dropdown harmônicos"""
+        """Cria a seção de Plano de Tratamento com layout compactado"""
         # Frame da seção é o próprio frame_pai
         frame_secao = frame_pai
         
+        # Limpar qualquer conteúdo existente no frame_pai
+        for widget in frame_secao.winfo_children():
+            widget.destroy()
+        
         # Título da seção
-        frame_titulo = tk.Frame(frame_secao, bg=self.cores["titulo_bg"], bd=0)
+        frame_titulo = tk.Frame(frame_secao, bg=self.cores["titulo_bg"])
         frame_titulo.pack(fill=tk.X, padx=0, pady=0)
         
         titulo = tk.Label(
@@ -1730,29 +2009,28 @@ class FormularioFisioterapia:
         )
         titulo.pack(side=tk.LEFT, padx=15, pady=10)
         
-        # Conteúdo da seção
-        frame_conteudo_secao = tk.Frame(frame_secao, bg=self.cores["secao_bg"])
-        frame_conteudo_secao.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
+        # Usar um único frame para todo o conteúdo
+        frame_conteudo = tk.Frame(frame_secao, bg=self.cores["secao_bg"])
+        frame_conteudo.pack(fill=tk.BOTH, expand=True, padx=15, pady=0)
         
-        # Sessões por semana com interface melhorada
-        frame_frecuencia = tk.Frame(frame_conteudo_secao, bg=self.cores["secao_bg"], padx=10, pady=10)
-        frame_frecuencia.pack(fill=tk.X, expand=True, padx=5, pady=5)
+        # Configuração de grid para melhor controle do layout
+        frame_conteudo.columnconfigure(0, weight=1)
         
-        # Título como texto externo
+        # ================ FREQUÊNCIA E DURAÇÃO ================
         label_frecuencia = tk.Label(
-            frame_frecuencia, 
+            frame_conteudo, 
             text="Frecuencia y duración de las sesiones", 
             bg=self.cores["secao_bg"],
             fg=self.cores["texto_destaque"],
-            font=FONTES["texto_secao"]
+            font=('Segoe UI', 16, 'bold')
         )
-        label_frecuencia.pack(anchor="w", padx=5, pady=5)
+        label_frecuencia.grid(row=0, column=0, sticky="w", padx=5, pady=(10, 5))
         
-        # Frame para selecionar frequência e duração
-        frame_selecao = tk.Frame(frame_frecuencia, bg=self.cores["secao_bg"])
-        frame_selecao.pack(fill=tk.X, expand=True, padx=5, pady=5)
+        # Frame para os seletores de frequência e duração
+        frame_selecao = tk.Frame(frame_conteudo, bg=self.cores["secao_bg"])
+        frame_selecao.grid(row=1, column=0, sticky="w", padx=5, pady=(0, 5))
         
-        # Seletor de frequência (sessões por semana)
+        # Seletor de frequência
         label_sesiones = tk.Label(
             frame_selecao, 
             text="Sesiones por semana:", 
@@ -1762,28 +2040,22 @@ class FormularioFisioterapia:
         )
         label_sesiones.grid(row=0, column=0, padx=5, pady=5, sticky="w")
         
+        # Definir cor mais harmônica para os botões
+        cor_botao = self.cores["button_bg"]
+        
         # Estilizar OptionMenu para sesiones
         var_sesiones = tk.StringVar(value="2")
         opcoes_sesiones = OPCOES["sesiones_semana"]
         
-        # Definir cor mais harmônica para os botões - tons esverdeados mais escuros que combinam com o tema
-        # Usando button_bg que já é uma versão mais escura do verde principal
-        cor_botao = self.cores["button_bg"]
-        cor_hover = "#006e50"  # Tom ligeiramente mais escuro para o hover
-        
-        # Criando um frame com aparência de botão para o OptionMenu de sesiones
         frame_sesiones = tk.Frame(
             frame_selecao,
             bg=cor_botao,
             highlightbackground=cor_botao,
             highlightthickness=1,
-            bd=0,
-            padx=0,
-            pady=0
+            bd=0
         )
         frame_sesiones.grid(row=0, column=1, padx=5, pady=5, sticky="w")
         
-        # Criando OptionMenu estilizado
         cbox_sesiones = tk.OptionMenu(
             frame_sesiones, 
             var_sesiones, 
@@ -1793,8 +2065,6 @@ class FormularioFisioterapia:
             width=5, 
             bg=cor_botao,
             fg=self.cores["texto_destaque"],
-            activebackground=cor_hover,
-            activeforeground=self.cores["texto_destaque"],
             highlightthickness=0,
             bd=0,
             relief="flat",
@@ -1804,7 +2074,7 @@ class FormularioFisioterapia:
         )
         cbox_sesiones.pack(fill=tk.BOTH, expand=True)
         
-        # Seletor de duração da sessão
+        # Seletor de duração
         label_duracion = tk.Label(
             frame_selecao, 
             text="Duración de cada sesión:", 
@@ -1818,19 +2088,15 @@ class FormularioFisioterapia:
         var_duracion = tk.StringVar(value="60 minutos")
         opcoes_duracion = OPCOES["duracion_sesion"]
         
-        # Criando um frame com aparência de botão para o OptionMenu de duración
         frame_duracion = tk.Frame(
             frame_selecao,
             bg=cor_botao,
             highlightbackground=cor_botao,
             highlightthickness=1,
-            bd=0,
-            padx=0,
-            pady=0
+            bd=0
         )
         frame_duracion.grid(row=0, column=3, padx=5, pady=5, sticky="w")
         
-        # Criando OptionMenu estilizado
         cbox_duracion = tk.OptionMenu(
             frame_duracion, 
             var_duracion, 
@@ -1840,8 +2106,6 @@ class FormularioFisioterapia:
             width=10, 
             bg=cor_botao,
             fg=self.cores["texto_destaque"],
-            activebackground=cor_hover,
-            activeforeground=self.cores["texto_destaque"],
             highlightthickness=0,
             bd=0,
             relief="flat",
@@ -1857,58 +2121,48 @@ class FormularioFisioterapia:
         
         # Observações sobre frequência
         label_obs_freq = tk.Label(
-            frame_frecuencia, 
+            frame_conteudo, 
             text="Observaciones adicionales:", 
             bg=self.cores["secao_bg"],
             fg=self.cores["texto_destaque"],
             font=FONTES["campo"]
         )
-        label_obs_freq.pack(anchor="w", padx=5, pady=5)
+        label_obs_freq.grid(row=2, column=0, sticky="w", padx=5, pady=(5, 0))
         
         obs_frecuencia = CampoTextoAutoExpansivel(
-            frame_frecuencia,
+            frame_conteudo,
             width=90,
             height=3,
             max_height=15,
             bg=self.cores["campo_bg"],
             placeholder="Detalles sobre el programa de tratamiento..."
         )
-        obs_frecuencia.pack(fill=tk.X, expand=True, padx=5, pady=5)
+        obs_frecuencia.grid(row=3, column=0, sticky="ew", padx=5, pady=(0, 10))
         
-        # Vincular evento de modificação
         obs_frecuencia.texto.bind("<KeyRelease>", lambda e: self.marcar_modificado())
-        
-        # Armazenar referência ao campo
         self.campos["obs_frecuencia"] = obs_frecuencia
         
-        # Exercícios recomendados
-        frame_ejercicios = tk.Frame(frame_conteudo_secao, bg=self.cores["secao_bg"], padx=10, pady=10)
-        frame_ejercicios.pack(fill=tk.X, expand=True, padx=5, pady=(10, 5))
-        
-        # Título como texto externo
+        # ================ EXERCÍCIOS RECOMENDADOS ================
         label_ejercicios = tk.Label(
-            frame_ejercicios, 
+            frame_conteudo, 
             text="Ejercicios recomendados para el hogar", 
             bg=self.cores["secao_bg"],
             fg=self.cores["texto_destaque"],
-            font=FONTES["subtitulo_secao"]
+            font=('Segoe UI', 16, 'bold')
         )
-        label_ejercicios.pack(anchor="w", padx=5, pady=5)
+        label_ejercicios.grid(row=4, column=0, sticky="w", padx=5, pady=(10, 5))
         
         ejercicios = CampoTextoAutoExpansivel(
-            frame_ejercicios,
+            frame_conteudo,
             width=90,
             height=8,
             max_height=30,
             bg=self.cores["campo_bg"],
             placeholder="Describa los ejercicios que el paciente debe realizar en casa..."
         )
-        ejercicios.pack(fill=tk.X, expand=True, padx=5, pady=5)
+        ejercicios.grid(row=5, column=0, sticky="ew", padx=5, pady=(0, 10))
         
-        # Vincular evento de modificação
         ejercicios.texto.bind("<KeyRelease>", lambda e: self.marcar_modificado())
-        
-        # Armazenar referência ao campo
         self.campos["Ejercicios recomendados"] = ejercicios
     
     def criar_secao_seguimiento(self, frame_pai):
@@ -2402,6 +2656,250 @@ class FormularioFisioterapia:
                 icon='error'
             )
 
+    def configurar_campos_expandidos(self):
+        """Configura os campos para suportar até 1500 caracteres"""
+        
+        # Lista de campos que devem suportar 1500 caracteres
+        campos_expandidos = [
+            "Alergias",
+            "Motivo de consulta",
+            "Antecedentes", 
+            "Efermedad actual",
+            "Cirurgías previas",
+            "Medicamentos actuales",
+            "Conducta",
+            "Postura",
+            "Simetría corporal",
+            "Deformidades aparentes", 
+            "Puntos dolorosos",
+            "Tensión muscular",
+            "Curvas Fisiológicas",
+            "Presencia de Escoliosis",
+            "Cifosis o Lordosis",
+            "Movimiento Activo",
+            "Movimiento Pasivo",
+            "Evaluación de articulaciones",
+            "Evaluación de grupos musculares",
+            "Reflejos",
+            "Coordinación motora",
+            "Equilibrio",
+            "Capacidad para realizar actividades diarias",
+            "Limitaciones y dificultades",
+            "Ejercicios con dedos",
+            "Precisión en movimientos",
+            "Marcha",
+            "Equilibrio Dinámico",
+            "Pruebas ortopédicas",
+            "Pruebas neurológicas",
+            "Pruebas de estabilidad",
+            "observaciones_dolor",
+            "Resumen del problema",
+            "Objetivos del tratamiento",
+            "obs_frecuencia",
+            "Ejercicios recomendados",
+            "programacion_seguimiento",
+            "criterios_adicionales"
+        ]
+        
+        # Configurar os campos existentes para expandir adequadamente
+        for nome_campo in campos_expandidos:
+            if nome_campo in self.campos:
+                campo = self.campos[nome_campo]
+                
+                # Verificar se o campo é do tipo CampoTextoAutoExpansivel
+                if hasattr(campo, 'texto'):
+                    # Definir o limite máximo de caracteres para 1500
+                    campo.max_caracteres = 1500
+                    
+                    # Garantir que não haja limite na altura máxima para mostrar todo o conteúdo
+                    campo.altura_maxima = 0  # 0 indica sem limite
+                    
+                    # Configurar o campo de texto para se adaptar ao conteúdo
+                    campo.texto.config(wrap="word")  # Quebra de linha por palavra
+
+    def criar_campo_texto_expandido(self, parent, placeholder, max_caracteres=1500):
+        """Cria um campo de texto expandido com suporte a 1500 caracteres"""
+        campo_texto = CampoTextoAutoExpansivel(
+            parent, 
+            width=60, 
+            height=2, 
+            max_height=0,  # Sem limite de altura
+            bg=self.cores["campo_bg"],
+            placeholder=placeholder,
+            max_caracteres=max_caracteres
+        )
+        
+        # Vincular evento de modificação
+        campo_texto.texto.bind("<KeyRelease>", lambda e: self.marcar_modificado())
+        
+        return campo_texto
+
+    def modificar_criacao_campos_texto(self):
+        """Modifica os métodos de criação de campo para usar campos com suporte a 1500 caracteres"""
+        # Substituir o método original
+        self.criar_campo_em_grid_original = self.criar_campo_em_grid
+        
+        # Substituir pelo método modificado
+        def criar_campo_em_grid_modificado(parent, texto_label, linha, col, colspan):
+            # Label à esquerda
+            label = tk.Label(
+                parent, 
+                text=texto_label, 
+                bg=self.cores["secao_bg"],
+                fg=self.cores["texto_destaque"],
+                font=FONTES["campo"]
+            )
+            label.grid(row=linha, column=col, padx=10, pady=5, sticky="w")
+            
+            # Lista de campos que precisam suportar 1500 caracteres
+            campos_expandidos = [
+                "Alergias", "Motivo de consulta", "Antecedentes", "Efermedad actual",
+                "Cirurgías previas", "Medicamentos actuales", "Conducta", "Postura",
+                "Simetría corporal", "Deformidades aparentes", "Puntos dolorosos",
+                "Tensión muscular", "Curvas Fisiológicas", "Presencia de Escoliosis",
+                "Cifosis o Lordosis", "Movimiento Activo", "Movimiento Pasivo",
+                "Evaluación de articulaciones", "Evaluación de grupos musculares",
+                "Reflejos", "Coordinación motora", "Equilibrio",
+                "Capacidad para realizar actividades diarias", "Limitaciones y dificultades",
+                "Ejercicios con dedos", "Precisión en movimientos", "Marcha", 
+                "Equilibrio Dinámico", "Pruebas ortopédicas", "Pruebas neurológicas",
+                "Pruebas de estabilidad", "observaciones_dolor", "Resumen del problema",
+                "Objetivos del tratamiento", "obs_frecuencia", "Ejercicios recomendados",
+                "programacion_seguimiento", "criterios_adicionales"
+            ]
+            
+            # Verificar se este campo deve ter suporte expandido
+            precisa_expandir = texto_label in campos_expandidos
+            
+            # Campo de texto expansível
+            campo = CampoTextoAutoExpansivel(
+                parent, 
+                width=40, 
+                height=2, 
+                max_height=0 if precisa_expandir else 6,  # Sem limite para campos expandidos
+                bg=self.cores["campo_bg"],
+                placeholder=f"Ingrese {texto_label.replace('.', '').replace('*', '').lower()}...",
+                max_caracteres=1500 if precisa_expandir else 500  # 1500 para campos expandidos
+            )
+            
+            # Se o colspan for maior que 1, o campo ocupa múltiplas colunas
+            if colspan > 1:
+                campo.grid(
+                    row=linha, 
+                    column=col, 
+                    columnspan=colspan, 
+                    padx=10, 
+                    pady=5, 
+                    sticky="ew"
+                )
+            else:
+                # Senão, o campo fica na coluna seguinte
+                campo.grid(
+                    row=linha, 
+                    column=col+1, 
+                    padx=10, 
+                    pady=5, 
+                    sticky="ew"
+                )
+            
+            # Vincular evento de modificação
+            campo.texto.bind("<KeyRelease>", lambda e: self.marcar_modificado())
+            
+            # Armazenar referência ao campo
+            self.campos[texto_label] = campo
+            
+            return campo
+        
+        # Atribuir o método modificado
+        self.criar_campo_em_grid = criar_campo_em_grid_modificado
+
+    def aplicar_modificacoes_metodos(self):
+        """Aplica as modificações nos métodos da classe FormularioFisioterapia"""
+        # Modificar a forma como os campos são criados nas abas
+        self.modificar_criacao_campos_texto()
+        
+        # Para o método configurar_formulario, vamos usar uma abordagem diferente
+        # Salvar referência ao método original
+        formulario_original = self.configurar_formulario
+        
+        # Criar uma função de substituição que preserva o self corretamente
+        def novo_configurar_formulario(*args, **kwargs):
+            # Chamar o método original
+            formulario_original(*args, **kwargs)
+            
+            # Configurar os campos para suportar 1500 caracteres
+            self.configurar_campos_expandidos()
+        
+        # Substituir o método
+        self.configurar_formulario = novo_configurar_formulario
+
+    # Adicionar ao método configurar_formulario na classe FormularioFisioterapia
+    def configurar_formulario_modificado(self):
+        """Versão modificada do método configurar_formulario"""
+        # Código original...
+        
+        # Chamar o método para configurar os campos expandidos após criar todos os campos
+        self.configurar_campos_expandidos()
+
+
+    # Método para atualizar os campos no FormularioFisioterapia
+    def atualizar_campos_para_suportar_1500_caracteres(self):
+        """Atualiza todos os campos específicos para suportar 1500 caracteres"""
+        # Lista de campos que devem suportar até 1500 caracteres
+        campos_para_atualizar = [
+            "Alergias",
+            "Motivo de consulta",
+            "Antecedentes", 
+            "Efermedad actual",
+            "Cirurgías previas",
+            "Medicamentos actuales",
+            "Conducta",
+            "Postura",
+            "Simetría corporal",
+            "Deformidades aparentes", 
+            "Puntos dolorosos",
+            "Tensión muscular",
+            "Curvas Fisiológicas",
+            "Presencia de Escoliosis",
+            "Cifosis o Lordosis",
+            "Movimiento Activo",
+            "Movimiento Pasivo",
+            "Evaluación de articulaciones",
+            "Evaluación de grupos musculares",
+            "Reflejos",
+            "Coordinación motora",
+            "Equilibrio",
+            "Capacidad para realizar actividades diarias",
+            "Limitaciones y dificultades",
+            "Ejercicios con dedos",
+            "Precisión en movimientos",
+            "Marcha",
+            "Equilibrio Dinámico",
+            "Pruebas ortopédicas",
+            "Pruebas neurológicas",
+            "Pruebas de estabilidad",
+            "observaciones_dolor",
+            "Resumen del problema",
+            "Objetivos del tratamiento",
+            "obs_frecuencia",
+            "Ejercicios recomendados",
+            "programacion_seguimiento",
+            "criterios_adicionales"
+        ]
+        
+        # Para cada campo na lista, verificar se já existe e atualizar suas propriedades
+        for nome_campo in campos_para_atualizar:
+            if nome_campo in self.campos:
+                campo = self.campos[nome_campo]
+                
+                # Se for um CampoTextoAutoExpansivel, atualizar suas propriedades
+                if hasattr(campo, 'max_caracteres'):
+                    campo.max_caracteres = 1500
+                    campo.altura_maxima = 0  # Sem limite de altura
+                    
+                    # Forçar a atualização da altura se houver conteúdo
+                    if hasattr(campo, '_ajustar_altura'):
+                        campo._ajustar_altura()
 
 # Função para adicionar o formulário a qualquer notebook
 def adicionar_formulario_fisioterapia(notebook):

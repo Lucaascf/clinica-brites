@@ -107,7 +107,8 @@ class DetalhesPacienteWindow:
                 return
         except:
             return
-            # Mapeamento de campos para nomes mais amigáveis em português
+        
+        # Mapeamento de campos para nomes mais amigáveis em português
         mapeamento_campos = {
             "Nombre Completo": "Nome Completo",
             "Edad": "Idade",
@@ -332,16 +333,22 @@ class DetalhesPacienteWindow:
                             if isinstance(valor, list):
                                 valor = ", ".join(valor)
                             
-                            valor_campo = tk.Label(
-                                grid_campos, 
-                                text=str(valor), 
+                            # Para todos os campos, usar Text widget para exibir o valor completo com quebra de linha
+                            text_valor = tk.Text(
+                                grid_campos,
+                                height=min(10, max(1, len(str(valor)) // 70 + 1)),  # Altura dinâmica baseada no conteúdo
+                                width=60,  # Largura fixa para o widget
+                                wrap=tk.WORD,  # Quebra de linha por palavra
                                 bg=self.cores["secao_bg"],
                                 fg=self.cores["texto"],
                                 font=self.fontes["campo"],
-                                wraplength=450,
-                                justify=tk.LEFT
+                                relief=tk.FLAT,
+                                borderwidth=0,
+                                highlightthickness=0
                             )
-                            valor_campo.grid(row=j, column=1, padx=15, pady=8, sticky="nw")
+                            text_valor.insert("1.0", str(valor))
+                            text_valor.config(state=tk.DISABLED)  # Somente leitura
+                            text_valor.grid(row=j, column=1, padx=15, pady=8, sticky="nw")
             else:
                 # Grid para os campos desta seção
                 grid_campos = tk.Frame(frame_dados, bg=self.cores["secao_bg"])
@@ -419,18 +426,25 @@ class DetalhesPacienteWindow:
                         )
                         label_obs.grid(row=2, column=0, padx=15, pady=(20, 5), sticky="nw")
                         
-                        text_obs = tk.Label(
-                            grid_campos, 
-                            text=self.dados.get('observaciones_dolor', ''),
+                        # Usar Text widget para exibir o valor completo
+                        texto_obs = self.dados.get('observaciones_dolor', '')
+                        text_obs = tk.Text(
+                            grid_campos,
+                            height=min(10, max(1, len(texto_obs) // 70 + 1)),  # Altura dinâmica baseada no conteúdo
+                            width=60,  # Largura fixa para o widget
+                            wrap=tk.WORD,  # Quebra de linha por palavra
                             bg=self.cores["secao_bg"],
                             fg=self.cores["texto"],
                             font=self.fontes["campo"],
-                            wraplength=450,
-                            justify=tk.LEFT
+                            relief=tk.FLAT, 
+                            borderwidth=0,
+                            highlightthickness=0
                         )
+                        text_obs.insert("1.0", texto_obs)
+                        text_obs.config(state=tk.DISABLED)  # Somente leitura
                         text_obs.grid(row=2, column=1, padx=15, pady=(20, 5), sticky="nw")
                 else:
-                    # Para todas as outras seções, mostrar campos normalmente
+                    # Para todas as outras seções, mostrar campos usando Text widget
                     row_count = 0
                     
                     for campo in secao['campos']:
@@ -495,50 +509,30 @@ class DetalhesPacienteWindow:
                                     'programacion_seguimiento', 'fecha_evaluacion'
                                 ]
                                 
-                                # Para campos com texto potencialmente longo
-                                if campo not in campos_curtos and valor and len(str(valor)) > 300:
-                                    # Criar frame para o texto
-                                    frame_texto = tk.Frame(grid_campos, bg=self.cores["secao_bg"])
-                                    frame_texto.grid(row=row_count, column=1, padx=15, pady=8, sticky="nsew")
+                                # Para qualquer campo, mesmo curto, usar Text widget para garantir exibição completa
+                                if valor:
+                                    texto_str = str(valor)
+                                    # Calcular altura baseada no conteúdo
+                                    num_linhas = min(15, max(1, len(texto_str) // 70 + texto_str.count('\n') + 1))
                                     
-                                    # Calculamos uma altura apropriada com base no comprimento do texto
-                                    # mas garantimos que seja totalmente visível
-                                    altura_texto = min(30, max(5, len(str(valor)) // 50))
-                                    
-                                    # Criar um widget Text somente leitura para mostrar todo o texto
-                                    texto_display = tk.Text(
-                                        frame_texto,
-                                        width=90,  # Muito largo para comportar todo o texto
-                                        height=altura_texto,
+                                    text_display = tk.Text(
+                                        grid_campos,
+                                        height=num_linhas,
+                                        width=60,
                                         wrap=tk.WORD,
                                         bg=self.cores["secao_bg"],
                                         fg=self.cores["texto"],
                                         font=self.fontes["campo"],
                                         relief=tk.FLAT,
-                                        padx=5,
-                                        pady=5
+                                        borderwidth=0,
+                                        highlightthickness=0
                                     )
-                                    texto_display.pack(fill=tk.BOTH, expand=True)
-                                    
-                                    # Inserir o texto e desabilitar edição
-                                    texto_display.insert(tk.END, str(valor))
-                                    texto_display.config(state="disabled")
-                                    
-                                else:
-                                    # Para campos com texto curto, usamos Labels normais
-                                    valor_campo = tk.Label(
-                                        grid_campos, 
-                                        text=str(valor), 
-                                        bg=self.cores["secao_bg"],
-                                        fg=self.cores["texto"],
-                                        font=self.fontes["campo"],
-                                        wraplength=800,  # Aumentado consideravelmente para textos longos
-                                        justify=tk.LEFT
-                                    )
-                                    valor_campo.grid(row=row_count, column=1, padx=15, pady=8, sticky="nw")
+                                    text_display.insert("1.0", texto_str)
+                                    text_display.config(state=tk.DISABLED)  # Somente leitura
+                                    text_display.grid(row=row_count, column=1, padx=15, pady=8, sticky="nw")
                                 
                                 row_count += 1
-    
+                                
     def criar_botoes_acao(self):
         """Cria os botões de ação na parte inferior da janela"""
         frame_botoes = tk.Frame(self.window, bg=self.cores["secao_bg"], padx=10, pady=10)
