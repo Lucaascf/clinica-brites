@@ -11,6 +11,7 @@ import threading
 # Importar o sistema de login
 from client.crontrollers.integracao_login import integrar_login_sistema
 
+
 def main():
     """Função principal que inicia o sistema"""
     try:
@@ -68,6 +69,8 @@ def main():
             # Criar as abas
             aba_clientes = adicionar_aba_clientes(notebook)
             formulario = adicionar_formulario_fisioterapia(notebook)
+
+            # adicionar_botao_preenchimento(root)
             
             # Modificar o método salvar do formulário para usar o banco de dados
             modificar_salvar_formulario(formulario)
