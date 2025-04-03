@@ -148,6 +148,7 @@ class EditableLabel(tk.Frame):
         # Se max_chars não for None, adicionar validação
         if self.max_chars is not None:
             self.text.bind("<KeyPress>", self._check_limit)
+            self.text.bind("<<Paste>>", self._on_paste)
         
         # Controle de foco e eventos de scroll
         self._has_focus = False
@@ -181,6 +182,38 @@ class EditableLabel(tk.Frame):
         if not self.text.get('1.0', 'end-1c'):
             self.text.insert('1.0', self.placeholder)
             self.text.config(fg=self.placeholder_color)
+
+    def _on_paste(self, event):
+        """Controla a colagem para respeitar o limite de caracteres"""
+        if self.max_chars is None:
+            return
+            
+        # Interceptar o evento padrão de colagem
+        self.text.tk.call('break')
+        
+        try:
+            # Obter texto da área de transferência
+            clipboard_text = self.clipboard_get()
+            
+            # Calcular o espaço disponível
+            current_text = self.text.get('1.0', 'end-1c')
+            available_chars = self.max_chars - len(current_text)
+            
+            # Se for placeholder, temos todo o espaço disponível
+            if self.placeholder and current_text == self.placeholder:
+                available_chars = self.max_chars
+                self.text.delete('1.0', tk.END)
+                self.text.config(fg='black')
+                
+            # Truncar o texto se necessário
+            if len(clipboard_text) > available_chars:
+                clipboard_text = clipboard_text[:available_chars]
+                
+            # Inserir texto truncado
+            self.text.insert(tk.INSERT, clipboard_text)
+            return 'break'
+        except:
+            return
 
     def _check_limit(self, event):
         """Verifica se o texto excede o limite de caracteres"""
@@ -434,23 +467,6 @@ class FormularioFisioterapia:
 
         self.aplicar_ajustes_todos_campos()
 
-        self.configurar_campos_expansiveis()
-
-    def configurar_campos_expansiveis(self):
-        """Configura todos os campos para expandir adequadamente com 1500 caracteres"""
-        # Iterar por todos os campos do formulário
-        for nome_campo, campo in self.campos.items():
-            # Verificar se é um campo de texto expansível
-            if hasattr(campo, 'texto'):
-                # Definir limite máximo de caracteres para 1500
-                campo.max_caracteres = 1000000
-                
-                # Desativar limite de altura para permitir que cresça quanto necessário
-                campo.altura_maxima = 0  # 0 significa sem limite
-                
-                # Forçar recálculo da altura
-                campo._ajustar_altura()
-
     def criar_sistema_rolagem(self):
         """Cria o sistema de rolagem para o formulário"""
         # Frame principal com rolagem
@@ -560,27 +576,6 @@ class FormularioFisioterapia:
         
         # Botões de ação
         self.criar_botoes_acao(linha)
-
-    def aplicar_ajustes_todos_campos(self):
-        """
-        Aplica os ajustes necessários em todos os campos do formulário
-        para garantir layout correto.
-        """
-        # Verificar cada campo do formulário
-        for nome_campo, campo in self.campos.items():
-            # Se for um CampoTextoAutoExpansivel
-            if hasattr(campo, 'texto'):
-                # Garantir que a largura seja fixa e a quebra de linha esteja ativada
-                campo.texto.config(wrap="word", width=campo.largura)
-                
-                # Aplicar ajuste de altura
-                if hasattr(campo, '_ajustar_altura'):
-                    campo._ajustar_altura()
-        
-        # Atualizar a interface
-        self.frame.update_idletasks()
-
-
 
     def aplicar_ajustes_todos_campos(self):
         """
@@ -846,7 +841,7 @@ class FormularioFisioterapia:
         
         campo_contato = EditableLabel(
             frame_conteudo_secao,
-            max_chars=30,  # O width será calculado automaticamente (30 + 2)
+            max_chars=180,  # O width será calculado automaticamente (30 + 2)
             min_lines=1,
             bg=self.cores["campo_bg"],
             placeholder="Ingrese contacto...",
@@ -888,17 +883,17 @@ class FormularioFisioterapia:
         )
         label_area.grid(row=3, column=0, padx=(0, 5), pady=(0, 10), sticky="w")
         
-        campo_area = CampoTextoAutoExpansivel(
+        campo_area = EditableLabel(
             frame_conteudo_secao, 
-            width=50, 
-            height=1, 
-            max_height=2, 
+            max_chars=210, 
+            min_lines=1,  
             bg=self.cores["campo_bg"],
-            placeholder="Ingrese área de consulta..."
+            placeholder="Ingrese área de consulta...",
+            placeholder_color=PLACEHOLDER_COLOR
         )
         campo_area.grid(row=3, column=1, columnspan=3, padx=0, pady=(0, 10), sticky="ew")
-        campo_area.texto.bind("<KeyRelease>", lambda e: self.marcar_modificado())
-        self.campos["Área de consulta"] = campo_area
+        campo_area.text.bind("<KeyRelease>", lambda e: self.marcar_modificado())
+        self.campos["Área de consulta"] = campo_area.text
         
         # --- QUINTA LINHA: ALERGIAS ---
         label_alergias = tk.Label(
@@ -915,9 +910,10 @@ class FormularioFisioterapia:
         campo_alergias = EditableLabel(
             frame_conteudo_secao,
             min_lines=3,
-            width=90,
+            #width=90,
             bg=self.cores["campo_bg"],
-            font=FONTES["campo"]
+            font=FONTES["campo"],
+            placeholder="Ingrese alergias..."
         )
 
         # Posicionamento (como antes)
@@ -992,23 +988,20 @@ class FormularioFisioterapia:
             label.grid(row=linha_local, column=0, padx=5, pady=8, sticky="nw")
             
             # Campo de texto expansível configurado para 1500 caracteres
-            campo_texto = CampoTextoAutoExpansivel(
+            campo_texto = EditableLabel(
                 frame_conteudo_secao, 
-                width=50,  # Largura inicial
-                height=1,  # Altura inicial 
-                max_height=0,  # Sem limite de altura (o 0 significa sem limite)
+                min_lines=3,  # Largura inicial
                 bg=self.cores["campo_bg"],
                 placeholder=f"Ingrese {campo.lower()}...",
-                placeholder_color="#AAAAAA",
-                max_caracteres=1500  # Configurar para 1500 caracteres
+                placeholder_color=PLACEHOLDER_COLOR,
             )
             campo_texto.grid(row=linha_local, column=1, padx=5, pady=8, sticky="ew")
             
             # Vincular evento de modificação
-            campo_texto.texto.bind("<KeyRelease>", lambda e: self.marcar_modificado())
+            campo_texto.text.bind("<KeyRelease>", lambda e: self.marcar_modificado())
             
             # Armazenar referência ao campo
-            self.campos[campo] = campo_texto
+            self.campos[campo] = campo_texto.text
         
         return linha
     
@@ -1074,13 +1067,13 @@ class FormularioFisioterapia:
             frame_campo.grid(row=linha_local, column=1, padx=5, pady=5, sticky="w")
             
             # Campo de texto dentro do frame contenedor
-            campo_texto = CampoTextoAutoExpansivel(
+            campo_texto = EditableLabel(
                 frame_campo, 
-                width=90, 
-                height=15, 
-                max_height=50, 
+                min_lines=1, 
+                max_chars=50,  
                 bg=self.cores["campo_bg"],
-                placeholder=f"Ingrese {parametro}..."
+                placeholder=f"Ingrese {parametro}...",
+                placeholder_color=PLACEHOLDER_COLOR
             )
             campo_texto.pack(side=tk.LEFT, fill=tk.X)
             
@@ -1096,10 +1089,10 @@ class FormularioFisioterapia:
             label_unidade.pack(side=tk.LEFT)
             
             # Vincular evento de modificação
-            campo_texto.texto.bind("<KeyRelease>", lambda e: self.marcar_modificado())
+            campo_texto.text.bind("<KeyRelease>", lambda e: self.marcar_modificado())
             
             # Armazenar referência ao campo
-            self.campos[parametro] = campo_texto
+            self.campos[parametro] = campo_texto.text
         
         # Adicionar linha separadora após os parâmetros vitais - ajustado para linha 9
         separador_params = tk.Frame(frame_exame, height=1, bg="#cccccc")
@@ -1123,21 +1116,21 @@ class FormularioFisioterapia:
             label.grid(row=linha_local, column=0, padx=(5, 10), pady=5, sticky="w")
             
             # Campo de texto
-            campo_texto = CampoTextoAutoExpansivel(
+            campo_texto = EditableLabel(
                 frame_exame, 
-                width=60, 
-                height=2, 
-                max_height=5, 
+                width=53, 
+                min_lines=1, 
+                max_chars=50, 
                 bg=self.cores["campo_bg"],
                 placeholder=f"Ingrese {campo}..."
             )
-            campo_texto.grid(row=linha_local, column=1, padx=5, pady=5, sticky="ew")
+            campo_texto.grid(row=linha_local, column=1, padx=5, pady=5, sticky="w")
             
             # Vincular evento de modificação
-            campo_texto.texto.bind("<KeyRelease>", lambda e: self.marcar_modificado())
+            campo_texto.text.bind("<KeyRelease>", lambda e: self.marcar_modificado())
             
             # Armazenar referência ao campo
-            self.campos[campo] = campo_texto
+            self.campos[campo] = campo_texto.text
             
         # 1. Frame para Inspeção e Palpação
         frame_inspeccion = tk.Frame(notebook_avaliacao, bg=self.cores["secao_bg"], padx=10, pady=10)
@@ -1181,21 +1174,20 @@ class FormularioFisioterapia:
             label.grid(row=linha_local, column=0, padx=(5, 10), pady=5, sticky="w")
             
             # Campo de texto
-            campo_texto = CampoTextoAutoExpansivel(
+            campo_texto = EditableLabel(
                 frame_inspeccion, 
-                width=60, 
-                height=2, 
-                max_height=5, 
+                min_lines=4, 
                 bg=self.cores["campo_bg"],
-                placeholder=f"Ingrese información sobre {campo.lower()}..."
+                placeholder=f"Ingrese información sobre {campo.lower()}...",
+                placeholder_color=PLACEHOLDER_COLOR
             )
             campo_texto.grid(row=linha_local, column=1, padx=5, pady=5, sticky="ew")
             
             # Vincular evento de modificação
-            campo_texto.texto.bind("<KeyRelease>", lambda e: self.marcar_modificado())
+            campo_texto.text.bind("<KeyRelease>", lambda e: self.marcar_modificado())
             
             # Armazenar referência ao campo
-            self.campos[campo] = campo_texto
+            self.campos[campo] = campo_texto.text
         
         # 1.2 Título da Palpação com linha separadora apenas abaixo
         label_titulo_palpacion = tk.Label(
@@ -1231,21 +1223,20 @@ class FormularioFisioterapia:
             label.grid(row=linha_local, column=0, padx=(5, 10), pady=5, sticky="w")
             
             # Campo de texto
-            campo_texto = CampoTextoAutoExpansivel(
+            campo_texto = EditableLabel(
                 frame_inspeccion, 
-                width=60, 
-                height=2, 
-                max_height=5, 
+                min_lines=4,
                 bg=self.cores["campo_bg"],
-                placeholder=f"Ingrese información sobre {campo.lower()}..."
+                placeholder=f"Ingrese información sobre {campo.lower()}...",
+                placeholder_color=PLACEHOLDER_COLOR
             )
             campo_texto.grid(row=linha_local, column=1, padx=5, pady=5, sticky="ew")
             
             # Vincular evento de modificação
-            campo_texto.texto.bind("<KeyRelease>", lambda e: self.marcar_modificado())
+            campo_texto.text.bind("<KeyRelease>", lambda e: self.marcar_modificado())
             
             # Armazenar referência ao campo
-            self.campos[campo] = campo_texto
+            self.campos[campo] = campo_texto.text
         
         # 2. Frame para Coluna Vertebral
         frame_columna = tk.Frame(notebook_avaliacao, bg=self.cores["secao_bg"], padx=10, pady=10)
@@ -1288,21 +1279,20 @@ class FormularioFisioterapia:
             label.grid(row=linha_local, column=0, padx=(5, 10), pady=5, sticky="w")
             
             # Campo de texto
-            campo_texto = CampoTextoAutoExpansivel(
-                frame_columna, 
-                width=60, 
-                height=2, 
-                max_height=5, 
+            campo_texto = EditableLabel(
+                frame_columna,  
+                min_lines=4, 
                 bg=self.cores["campo_bg"],
-                placeholder=f"Ingrese información sobre {campo.lower()}..."
+                placeholder=f"Ingrese información sobre {campo.lower()}...",
+                placeholder_color=PLACEHOLDER_COLOR
             )
             campo_texto.grid(row=linha_local, column=1, padx=5, pady=5, sticky="ew")
             
             # Vincular evento de modificação
-            campo_texto.texto.bind("<KeyRelease>", lambda e: self.marcar_modificado())
+            campo_texto.text.bind("<KeyRelease>", lambda e: self.marcar_modificado())
             
             # Armazenar referência ao campo
-            self.campos[campo] = campo_texto
+            self.campos[campo] = campo_texto.text
         
         # 3. Frame para Mobilidade Articular
         frame_movilidad = tk.Frame(notebook_avaliacao, bg=self.cores["secao_bg"], padx=10, pady=10)
@@ -1354,21 +1344,20 @@ class FormularioFisioterapia:
             label.grid(row=linha_local, column=0, padx=(25, 10), pady=5, sticky="w")
             
             # Campo de texto
-            campo_texto = CampoTextoAutoExpansivel(
+            campo_texto = EditableLabel(
                 frame_movilidad, 
-                width=60, 
-                height=2, 
-                max_height=5, 
+                min_lines=3,  
                 bg=self.cores["campo_bg"],
-                placeholder=f"Ingrese información sobre movimiento {campo.lower()}..."
+                placeholder=f"Ingrese información sobre movimiento {campo.lower()}...",
+                placeholder_color=PLACEHOLDER_COLOR
             )
             campo_texto.grid(row=linha_local, column=1, padx=5, pady=5, sticky="ew")
             
             # Vincular evento de modificação
-            campo_texto.texto.bind("<KeyRelease>", lambda e: self.marcar_modificado())
+            campo_texto.text.bind("<KeyRelease>", lambda e: self.marcar_modificado())
             
             # Armazenar referência ao campo
-            self.campos[f"Movimiento {campo}"] = campo_texto
+            self.campos[f"Movimiento {campo}"] = campo_texto.text
         
         # Avaliação das articulações - ajustada para linha 5
         label_articul = tk.Label(
@@ -1380,21 +1369,20 @@ class FormularioFisioterapia:
         )
         label_articul.grid(row=5, column=0, columnspan=2, padx=5, pady=(15, 10), sticky="w")
         
-        campo_art = CampoTextoAutoExpansivel(
+        campo_art = EditableLabel(
             frame_movilidad,
-            width=80,
-            height=4,
-            max_height=8,
+            min_lines=4,
             bg=self.cores["campo_bg"],
-            placeholder="Describa la evaluación de las articulaciones afectadas..."
+            placeholder="Describa la evaluación de las articulaciones afectadas...",
+            placeholder_color=PLACEHOLDER_COLOR
         )
         campo_art.grid(row=6, column=0, columnspan=2, padx=5, pady=5, sticky="ew")
         
         # Vincular evento de modificação
-        campo_art.texto.bind("<KeyRelease>", lambda e: self.marcar_modificado())
+        campo_art.text.bind("<KeyRelease>", lambda e: self.marcar_modificado())
         
         # Armazenar referência ao campo
-        self.campos["Evaluación de articulaciones"] = campo_art
+        self.campos["Evaluación de articulaciones"] = campo_art.text
         
         # 4. Frame para Força Muscular
         frame_fuerza = tk.Frame(notebook_avaliacao, bg=self.cores["secao_bg"], padx=10, pady=10)
@@ -1428,21 +1416,20 @@ class FormularioFisioterapia:
         )
         label_grupos.grid(row=2, column=0, columnspan=2, padx=5, pady=(5, 10), sticky="w")
         
-        campo_musculos = CampoTextoAutoExpansivel(
+        campo_musculos = EditableLabel(
             frame_fuerza,
-            width=80,
-            height=4,
-            max_height=8,
+            min_lines=4,
             bg=self.cores["campo_bg"],
-            placeholder="Describa la evaluación de los grupos musculares específicos..."
+            placeholder="Describa la evaluación de los grupos musculares específicos...",
+            placeholder_color=PLACEHOLDER_COLOR
         )
         campo_musculos.grid(row=3, column=0, columnspan=2, padx=5, pady=5, sticky="ew")
         
         # Vincular evento de modificação
-        campo_musculos.texto.bind("<KeyRelease>", lambda e: self.marcar_modificado())
+        campo_musculos.text.bind("<KeyRelease>", lambda e: self.marcar_modificado())
         
         # Armazenar referência ao campo
-        self.campos["Evaluación de grupos musculares"] = campo_musculos
+        self.campos["Evaluación de grupos musculares"] = campo_musculos.text
         
         # Níveis de força - ajustado para linha 4
         label_grados = tk.Label(
@@ -1464,29 +1451,33 @@ class FormularioFisioterapia:
             "Grado 5: Movimiento activo contra resistencia completa"
         ]
         
-        # Criar frame para checkbuttons com estilo - ajustado para linha 5
+        # Criar frame para radio buttons com estilo - ajustado para linha 5
         frame_check = tk.Frame(frame_fuerza, bg=self.cores["secao_bg"], padx=5, pady=5)
         frame_check.grid(row=5, column=0, columnspan=2, padx=5, pady=5, sticky="ew")
-        
-        # Criar checkbuttons em uma lista vertical
+
+        # Variável compartilhada para radio buttons (só permite uma seleção)
+        var_forca = tk.StringVar(value="")
+        self.radio_buttons["grado_fuerza"] = var_forca  # Guardar referência no dicionário de radio buttons
+
+        # Criar radio buttons em uma lista vertical com tamanho aumentado
         for i, opcao in enumerate(opcoes_forca):
-            var = tk.BooleanVar()
-            
-            check = tk.Checkbutton(
-                frame_check, 
-                text=opcao, 
-                variable=var,
-                command=self.marcar_modificado,
-                bg=self.cores["secao_bg"],
-                fg=self.cores["texto_destaque"],
-                selectcolor=self.cores["secao_bg"],
-                activebackground=self.cores["secao_bg"],
-                activeforeground=self.cores["texto_destaque"],
-                font=FONTES["checkbox_texto"]
+            style = ttk.Style()
+            style.configure('Big.TRadiobutton',
+                background=self.cores["secao_bg"],
+                foreground=self.cores["texto_destaque"],
+                font=('Segoe UI', 12),
+                indicatorsize=20  # Tamanho do indicador em pixels
             )
-            check.grid(row=i, column=0, padx=5, pady=2, sticky="w")
-            
-            self.checkbuttons.append((check, var))
+
+            radio = ttk.Radiobutton(
+                frame_check,
+                text=opcao,
+                variable=var_forca,
+                value=opcao,
+                command=self.marcar_modificado,
+                style='Big.TRadiobutton'
+            )
+            radio.grid(row=i, column=0, padx=5, pady=5, sticky="w")
 
         # 5. Frame para Avaliação Neuromuscular
         frame_neuro = tk.Frame(notebook_avaliacao, bg=self.cores["secao_bg"], padx=10, pady=10)
@@ -1529,21 +1520,20 @@ class FormularioFisioterapia:
             label.grid(row=linha_local, column=0, padx=(5, 10), pady=5, sticky="w")
             
             # Campo de texto
-            campo_texto = CampoTextoAutoExpansivel(
-                frame_neuro, 
-                width=60, 
-                height=2, 
-                max_height=5, 
+            campo_texto = EditableLabel(
+                frame_neuro,
+                min_lines=4,  
                 bg=self.cores["campo_bg"],
-                placeholder=f"Ingrese información sobre {campo.lower()}..."
+                placeholder=f"Ingrese información sobre {campo.lower()}...",
+                placeholder_color=PLACEHOLDER_COLOR
             )
             campo_texto.grid(row=linha_local, column=1, padx=5, pady=5, sticky="ew")
             
             # Vincular evento de modificação
-            campo_texto.texto.bind("<KeyRelease>", lambda e: self.marcar_modificado())
+            campo_texto.text.bind("<KeyRelease>", lambda e: self.marcar_modificado())
             
             # Armazenar referência ao campo
-            self.campos[campo] = campo_texto
+            self.campos[campo] = campo_texto.text
             
         # 6. Frame para Avaliação Funcional
         frame_funcional = tk.Frame(notebook_avaliacao, bg=self.cores["secao_bg"], padx=10, pady=10)
@@ -1585,21 +1575,20 @@ class FormularioFisioterapia:
             label.grid(row=linha_local, column=0, padx=(5, 10), pady=5, sticky="w")
             
             # Campo de texto
-            campo_texto = CampoTextoAutoExpansivel(
+            campo_texto = EditableLabel(
                 frame_funcional, 
-                width=60, 
-                height=2, 
-                max_height=5, 
+                min_lines=4, 
                 bg=self.cores["campo_bg"],
-                placeholder=f"Ingrese información sobre {campo.lower()}..."
+                placeholder=f"Ingrese información sobre {campo.lower()}...",
+                placeholder_color=PLACEHOLDER_COLOR
             )
             campo_texto.grid(row=linha_local, column=1, padx=5, pady=5, sticky="ew")
             
             # Vincular evento de modificação
-            campo_texto.texto.bind("<KeyRelease>", lambda e: self.marcar_modificado())
+            campo_texto.text.bind("<KeyRelease>", lambda e: self.marcar_modificado())
             
             # Armazenar referência ao campo
-            self.campos[campo] = campo_texto
+            self.campos[campo] = campo_texto.text
         
         # 7. Frame para Coordenação
         frame_coordinacion = tk.Frame(notebook_avaliacao, bg=self.cores["secao_bg"], padx=10, pady=10)
@@ -1651,21 +1640,20 @@ class FormularioFisioterapia:
             label.grid(row=linha_local, column=0, padx=(25, 10), pady=5, sticky="w")
             
             # Campo de texto
-            campo_texto = CampoTextoAutoExpansivel(
+            campo_texto = EditableLabel(
                 frame_coordinacion, 
-                width=60, 
-                height=2, 
-                max_height=5, 
+                min_lines=3, 
                 bg=self.cores["campo_bg"],
-                placeholder=f"Ingrese información sobre {campo.lower()}..."
+                placeholder=f"Ingrese información sobre {campo.lower()}...",
+                placeholder_color=PLACEHOLDER_COLOR
             )
             campo_texto.grid(row=linha_local, column=1, padx=5, pady=5, sticky="ew")
             
             # Vincular evento de modificação
-            campo_texto.texto.bind("<KeyRelease>", lambda e: self.marcar_modificado())
+            campo_texto.text.bind("<KeyRelease>", lambda e: self.marcar_modificado())
             
             # Armazenar referência ao campo
-            self.campos[campo] = campo_texto
+            self.campos[campo] = campo_texto.text
         
         # Coordenação motora grossa - ajustada para linha 5
         label_motora_gruesa = tk.Label(
@@ -1695,21 +1683,20 @@ class FormularioFisioterapia:
             label.grid(row=linha_local, column=0, padx=(25, 10), pady=5, sticky="w")
             
             # Campo de texto
-            campo_texto = CampoTextoAutoExpansivel(
+            campo_texto = EditableLabel(
                 frame_coordinacion, 
-                width=60, 
-                height=2, 
-                max_height=5, 
+                min_lines=3, 
                 bg=self.cores["campo_bg"],
-                placeholder=f"Ingrese información sobre {campo.lower()}..."
+                placeholder=f"Ingrese información sobre {campo.lower()}...",
+                placeholder_color=PLACEHOLDER_COLOR
             )
             campo_texto.grid(row=linha_local, column=1, padx=5, pady=5, sticky="ew")
             
             # Vincular evento de modificação
-            campo_texto.texto.bind("<KeyRelease>", lambda e: self.marcar_modificado())
+            campo_texto.text.bind("<KeyRelease>", lambda e: self.marcar_modificado())
             
             # Armazenar referência ao campo
-            self.campos[campo] = campo_texto
+            self.campos[campo] = campo_texto.text
         
     def criar_secao_pruebas_especificas(self, frame_pai):
         """Cria a seção de Testes Específicos com cards usando EditableLabel"""
@@ -1786,7 +1773,6 @@ class FormularioFisioterapia:
             # Vincular evento de modificação ao widget Text
             campo_texto.text.bind("<KeyRelease>", lambda e: self.marcar_modificado())
                 
-        
     def criar_secao_mediciones_escalas(self, frame_pai):
         """Cria a seção de Medições e Escalas com layout compactado - apenas EVA"""
         # Frame da seção é o próprio frame_pai
@@ -1916,21 +1902,20 @@ class FormularioFisioterapia:
         label_observaciones.grid(row=3, column=0, sticky="w", padx=5, pady=(5, 0))
         
         # Campo de texto para observações
-        observaciones = CampoTextoAutoExpansivel(
+        observaciones = EditableLabel(
             frame_conteudo, 
-            width=80,
-            height=3,
-            max_height=6,
+            min_lines=5,
             bg=self.cores["campo_bg"],
-            placeholder="Describa las características del dolor (tipo, localización, factores agravantes, etc.)"
+            placeholder="Describa las características del dolor",
+            placeholder_color=PLACEHOLDER_COLOR
         )
         observaciones.grid(row=4, column=0, sticky="ew", padx=5, pady=(0, 5))
         
         # Vincular evento de modificação
-        observaciones.texto.bind("<KeyRelease>", lambda e: self.marcar_modificado())
+        observaciones.text.bind("<KeyRelease>", lambda e: self.marcar_modificado())
         
         # Armazenar referência ao campo
-        self.campos["observaciones_dolor"] = observaciones
+        self.campos["observaciones_dolor"] = observaciones.text
     
     def criar_secao_diagnosticos(self, frame_pai):
         """Cria a seção de Diagnósticos Fisioterapêuticos"""
@@ -2578,7 +2563,8 @@ class FormularioFisioterapia:
                 if var.get():
                     forca_muscular.append(check.cget('text'))
             
-            dados['Fuerza Muscular'] = forca_muscular
+            # Processar radio button para força muscular
+            dados['Fuerza Muscular'] = self.radio_buttons["grado_fuerza"].get()
             
             # Processar radio buttons
             for var_name, var in self.radio_buttons.items():
@@ -2655,251 +2641,6 @@ class FormularioFisioterapia:
                 f"Error al preparar la impresión: {str(e)}",
                 icon='error'
             )
-
-    def configurar_campos_expandidos(self):
-        """Configura os campos para suportar até 1500 caracteres"""
-        
-        # Lista de campos que devem suportar 1500 caracteres
-        campos_expandidos = [
-            "Alergias",
-            "Motivo de consulta",
-            "Antecedentes", 
-            "Efermedad actual",
-            "Cirurgías previas",
-            "Medicamentos actuales",
-            "Conducta",
-            "Postura",
-            "Simetría corporal",
-            "Deformidades aparentes", 
-            "Puntos dolorosos",
-            "Tensión muscular",
-            "Curvas Fisiológicas",
-            "Presencia de Escoliosis",
-            "Cifosis o Lordosis",
-            "Movimiento Activo",
-            "Movimiento Pasivo",
-            "Evaluación de articulaciones",
-            "Evaluación de grupos musculares",
-            "Reflejos",
-            "Coordinación motora",
-            "Equilibrio",
-            "Capacidad para realizar actividades diarias",
-            "Limitaciones y dificultades",
-            "Ejercicios con dedos",
-            "Precisión en movimientos",
-            "Marcha",
-            "Equilibrio Dinámico",
-            "Pruebas ortopédicas",
-            "Pruebas neurológicas",
-            "Pruebas de estabilidad",
-            "observaciones_dolor",
-            "Resumen del problema",
-            "Objetivos del tratamiento",
-            "obs_frecuencia",
-            "Ejercicios recomendados",
-            "programacion_seguimiento",
-            "criterios_adicionales"
-        ]
-        
-        # Configurar os campos existentes para expandir adequadamente
-        for nome_campo in campos_expandidos:
-            if nome_campo in self.campos:
-                campo = self.campos[nome_campo]
-                
-                # Verificar se o campo é do tipo CampoTextoAutoExpansivel
-                if hasattr(campo, 'texto'):
-                    # Definir o limite máximo de caracteres para 1500
-                    campo.max_caracteres = 1500
-                    
-                    # Garantir que não haja limite na altura máxima para mostrar todo o conteúdo
-                    campo.altura_maxima = 0  # 0 indica sem limite
-                    
-                    # Configurar o campo de texto para se adaptar ao conteúdo
-                    campo.texto.config(wrap="word")  # Quebra de linha por palavra
-
-    def criar_campo_texto_expandido(self, parent, placeholder, max_caracteres=1500):
-        """Cria um campo de texto expandido com suporte a 1500 caracteres"""
-        campo_texto = CampoTextoAutoExpansivel(
-            parent, 
-            width=60, 
-            height=2, 
-            max_height=0,  # Sem limite de altura
-            bg=self.cores["campo_bg"],
-            placeholder=placeholder,
-            max_caracteres=max_caracteres
-        )
-        
-        # Vincular evento de modificação
-        campo_texto.texto.bind("<KeyRelease>", lambda e: self.marcar_modificado())
-        
-        return campo_texto
-
-    def modificar_criacao_campos_texto(self):
-        """Modifica os métodos de criação de campo para usar campos com suporte a 1500 caracteres"""
-        # Substituir o método original
-        self.criar_campo_em_grid_original = self.criar_campo_em_grid
-        
-        # Substituir pelo método modificado
-        def criar_campo_em_grid_modificado(parent, texto_label, linha, col, colspan):
-            # Label à esquerda
-            label = tk.Label(
-                parent, 
-                text=texto_label, 
-                bg=self.cores["secao_bg"],
-                fg=self.cores["texto_destaque"],
-                font=FONTES["campo"]
-            )
-            label.grid(row=linha, column=col, padx=10, pady=5, sticky="w")
-            
-            # Lista de campos que precisam suportar 1500 caracteres
-            campos_expandidos = [
-                "Alergias", "Motivo de consulta", "Antecedentes", "Efermedad actual",
-                "Cirurgías previas", "Medicamentos actuales", "Conducta", "Postura",
-                "Simetría corporal", "Deformidades aparentes", "Puntos dolorosos",
-                "Tensión muscular", "Curvas Fisiológicas", "Presencia de Escoliosis",
-                "Cifosis o Lordosis", "Movimiento Activo", "Movimiento Pasivo",
-                "Evaluación de articulaciones", "Evaluación de grupos musculares",
-                "Reflejos", "Coordinación motora", "Equilibrio",
-                "Capacidad para realizar actividades diarias", "Limitaciones y dificultades",
-                "Ejercicios con dedos", "Precisión en movimientos", "Marcha", 
-                "Equilibrio Dinámico", "Pruebas ortopédicas", "Pruebas neurológicas",
-                "Pruebas de estabilidad", "observaciones_dolor", "Resumen del problema",
-                "Objetivos del tratamiento", "obs_frecuencia", "Ejercicios recomendados",
-                "programacion_seguimiento", "criterios_adicionales"
-            ]
-            
-            # Verificar se este campo deve ter suporte expandido
-            precisa_expandir = texto_label in campos_expandidos
-            
-            # Campo de texto expansível
-            campo = CampoTextoAutoExpansivel(
-                parent, 
-                width=40, 
-                height=2, 
-                max_height=0 if precisa_expandir else 6,  # Sem limite para campos expandidos
-                bg=self.cores["campo_bg"],
-                placeholder=f"Ingrese {texto_label.replace('.', '').replace('*', '').lower()}...",
-                max_caracteres=1500 if precisa_expandir else 500  # 1500 para campos expandidos
-            )
-            
-            # Se o colspan for maior que 1, o campo ocupa múltiplas colunas
-            if colspan > 1:
-                campo.grid(
-                    row=linha, 
-                    column=col, 
-                    columnspan=colspan, 
-                    padx=10, 
-                    pady=5, 
-                    sticky="ew"
-                )
-            else:
-                # Senão, o campo fica na coluna seguinte
-                campo.grid(
-                    row=linha, 
-                    column=col+1, 
-                    padx=10, 
-                    pady=5, 
-                    sticky="ew"
-                )
-            
-            # Vincular evento de modificação
-            campo.texto.bind("<KeyRelease>", lambda e: self.marcar_modificado())
-            
-            # Armazenar referência ao campo
-            self.campos[texto_label] = campo
-            
-            return campo
-        
-        # Atribuir o método modificado
-        self.criar_campo_em_grid = criar_campo_em_grid_modificado
-
-    def aplicar_modificacoes_metodos(self):
-        """Aplica as modificações nos métodos da classe FormularioFisioterapia"""
-        # Modificar a forma como os campos são criados nas abas
-        self.modificar_criacao_campos_texto()
-        
-        # Para o método configurar_formulario, vamos usar uma abordagem diferente
-        # Salvar referência ao método original
-        formulario_original = self.configurar_formulario
-        
-        # Criar uma função de substituição que preserva o self corretamente
-        def novo_configurar_formulario(*args, **kwargs):
-            # Chamar o método original
-            formulario_original(*args, **kwargs)
-            
-            # Configurar os campos para suportar 1500 caracteres
-            self.configurar_campos_expandidos()
-        
-        # Substituir o método
-        self.configurar_formulario = novo_configurar_formulario
-
-    # Adicionar ao método configurar_formulario na classe FormularioFisioterapia
-    def configurar_formulario_modificado(self):
-        """Versão modificada do método configurar_formulario"""
-        # Código original...
-        
-        # Chamar o método para configurar os campos expandidos após criar todos os campos
-        self.configurar_campos_expandidos()
-
-
-    # Método para atualizar os campos no FormularioFisioterapia
-    def atualizar_campos_para_suportar_1500_caracteres(self):
-        """Atualiza todos os campos específicos para suportar 1500 caracteres"""
-        # Lista de campos que devem suportar até 1500 caracteres
-        campos_para_atualizar = [
-            "Alergias",
-            "Motivo de consulta",
-            "Antecedentes", 
-            "Efermedad actual",
-            "Cirurgías previas",
-            "Medicamentos actuales",
-            "Conducta",
-            "Postura",
-            "Simetría corporal",
-            "Deformidades aparentes", 
-            "Puntos dolorosos",
-            "Tensión muscular",
-            "Curvas Fisiológicas",
-            "Presencia de Escoliosis",
-            "Cifosis o Lordosis",
-            "Movimiento Activo",
-            "Movimiento Pasivo",
-            "Evaluación de articulaciones",
-            "Evaluación de grupos musculares",
-            "Reflejos",
-            "Coordinación motora",
-            "Equilibrio",
-            "Capacidad para realizar actividades diarias",
-            "Limitaciones y dificultades",
-            "Ejercicios con dedos",
-            "Precisión en movimientos",
-            "Marcha",
-            "Equilibrio Dinámico",
-            "Pruebas ortopédicas",
-            "Pruebas neurológicas",
-            "Pruebas de estabilidad",
-            "observaciones_dolor",
-            "Resumen del problema",
-            "Objetivos del tratamiento",
-            "obs_frecuencia",
-            "Ejercicios recomendados",
-            "programacion_seguimiento",
-            "criterios_adicionales"
-        ]
-        
-        # Para cada campo na lista, verificar se já existe e atualizar suas propriedades
-        for nome_campo in campos_para_atualizar:
-            if nome_campo in self.campos:
-                campo = self.campos[nome_campo]
-                
-                # Se for um CampoTextoAutoExpansivel, atualizar suas propriedades
-                if hasattr(campo, 'max_caracteres'):
-                    campo.max_caracteres = 1500
-                    campo.altura_maxima = 0  # Sem limite de altura
-                    
-                    # Forçar a atualização da altura se houver conteúdo
-                    if hasattr(campo, '_ajustar_altura'):
-                        campo._ajustar_altura()
 
 # Função para adicionar o formulário a qualquer notebook
 def adicionar_formulario_fisioterapia(notebook):
