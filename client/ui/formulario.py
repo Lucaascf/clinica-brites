@@ -23,21 +23,42 @@ class DateEntryImproved(DateEntry):
     """
     Versão simples do DateEntry que fecha o calendário ao clicar em qualquer lugar fora
     """
-    def __init__(self, master=None, **kw):
-        # Inicializar o DateEntry original
+    def __init__(self, master=None, auto_popup=False, **kw):
         super().__init__(master, **kw)
-        
-        # Manter controle se o calendário está visível
+        self.auto_popup = auto_popup
         self._calendario_visivel = False
         
-        # Limpar qualquer bind existente para o clique e adicionar o nosso
+        # Substituir o binding original
         self.unbind("<Button-1>")
-        self.bind("<Button-1>", self._alternar_calendario)
+        self.bind("<Button-1>", self._on_click, add="+")
         
-        # Adicionar bind global no nível da janela principal
-        # Isso captura cliques em qualquer lugar da aplicação
-        self.winfo_toplevel().bind("<Button-1>", self._verificar_clique_fora, add="+")
+        # Binding para fechar quando clicar fora
+        self.winfo_toplevel().bind("<Button-1>", self._fechar_se_clicar_fora, add="+")
     
+    def _on_click(self, event):
+        """Abre o calendário apenas quando clicado diretamente"""
+        if not self._calendario_visivel:
+            self.drop_down()
+            self._calendario_visivel = True
+        else:
+            self._top_cal.withdraw()
+            self._calendario_visivel = False
+        return "break"  # Impede propagação do evento
+    
+    def _fechar_se_clicar_fora(self, event):
+        """Fecha o calendário se clicar em qualquer lugar fora"""
+        if not hasattr(self, '_top_cal') or not self._top_cal:
+            return
+            
+        # Verificar se o clique foi fora do calendário e do campo
+        widget = event.widget
+        dentro = (widget == self) or (hasattr(widget, 'master') and widget.master == self._top_cal)
+        
+        if not dentro and self._calendario_visivel:
+            self._top_cal.withdraw()
+            self._calendario_visivel = False
+
+
     def _alternar_calendario(self, event=None):
         """Abre ou fecha o calendário ao clicar no campo"""
         # Impedir que o evento se propague para o bind global
@@ -57,9 +78,14 @@ class DateEntryImproved(DateEntry):
     
     def _verificar_clique_fora(self, event):
         """Fecha o calendário se o clique foi fora dele e do campo de entrada"""
-        # Verificar se o calendário está visível
+        # Primeiro verificar se o calendário existe e está visível
         if not hasattr(self, '_top_cal') or not self._top_cal:
             return
+            
+        # Verificar se o calendário é visível antes de tentar fechar
+        if not hasattr(self._top_cal, 'winfo_viewable') or not self._top_cal.winfo_viewable():
+            return
+    
             
         # Verificar se o calendário é visível antes de tentar fechar
         if not hasattr(self._top_cal, 'winfo_viewable') or not self._top_cal.winfo_viewable():
@@ -1939,10 +1965,14 @@ class FormularioFisioterapia:
         frame_conteudo_secao = tk.Frame(frame_secao, bg=self.cores["secao_bg"])
         frame_conteudo_secao.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
         
+        # Apenas ajuste as colunas para o grid expandir corretamente
+        frame_conteudo_secao.columnconfigure(1, weight=1)
+        
         # Campos
         campos = [
-            ("Resumen del problema", 0),
-            ("Objetivos del tratamiento", 1)
+            ("Patológico", 0),
+            ("Nutricional", 1),
+            ("Inmunologico", 2)
         ]
         
         for campo, linha_local in campos:
@@ -1951,26 +1981,26 @@ class FormularioFisioterapia:
                 text=campo, 
                 bg=self.cores["secao_bg"],
                 fg=self.cores["texto_destaque"],
-                font=FONTES["texto_secao"]  # Usando fonte maior definida no config
+                font=FONTES["texto_secao"]
             )
             label.grid(row=linha_local, column=0, padx=5, pady=8, sticky="nw")
             
-            # Campo de texto expansível com placeholder - Aumentado para suportar mais texto
-            campo_texto = CampoTextoAutoExpansivel(
+            # Campo de texto expansível com placeholder
+            campo_texto = EditableLabel(
                 frame_conteudo_secao, 
-                width=90,  # Aumentado para 90 caracteres
-                height=6,  # Altura inicial aumentada para 6 linhas 
-                max_height=25,  # Aumentado para 25 linhas máximas
+                min_lines=3,
                 bg=self.cores["campo_bg"],
-                placeholder=f"Ingrese {campo.lower()}..."
+                placeholder=f"Ingrese {campo.lower()}...",
+                placeholder_color=PLACEHOLDER_COLOR
             )
+            # Apenas use sticky="ew" para o campo expandir horizontalmente
             campo_texto.grid(row=linha_local, column=1, padx=5, pady=8, sticky="ew")
             
             # Vincular evento de modificação
-            campo_texto.texto.bind("<KeyRelease>", lambda e: self.marcar_modificado())
+            campo_texto.text.bind("<KeyRelease>", lambda e: self.marcar_modificado())
             
             # Armazenar referência ao campo
-            self.campos[campo] = campo_texto
+            self.campos[campo] = campo_texto.text
     
     def criar_secao_plan_tratamiento(self, frame_pai):
         """Cria a seção de Plano de Tratamento com layout compactado"""
@@ -2114,18 +2144,17 @@ class FormularioFisioterapia:
         )
         label_obs_freq.grid(row=2, column=0, sticky="w", padx=5, pady=(5, 0))
         
-        obs_frecuencia = CampoTextoAutoExpansivel(
+        obs_frecuencia = EditableLabel(
             frame_conteudo,
-            width=90,
-            height=3,
-            max_height=15,
+            min_lines=3,
             bg=self.cores["campo_bg"],
-            placeholder="Detalles sobre el programa de tratamiento..."
+            placeholder="Detalles sobre el programa de tratamiento...",
+            placeholder_color=PLACEHOLDER_COLOR
         )
         obs_frecuencia.grid(row=3, column=0, sticky="ew", padx=5, pady=(0, 10))
         
-        obs_frecuencia.texto.bind("<KeyRelease>", lambda e: self.marcar_modificado())
-        self.campos["obs_frecuencia"] = obs_frecuencia
+        obs_frecuencia.text.bind("<KeyRelease>", lambda e: self.marcar_modificado())
+        self.campos["obs_frecuencia"] = obs_frecuencia.text
         
         # ================ EXERCÍCIOS RECOMENDADOS ================
         label_ejercicios = tk.Label(
@@ -2137,23 +2166,60 @@ class FormularioFisioterapia:
         )
         label_ejercicios.grid(row=4, column=0, sticky="w", padx=5, pady=(10, 5))
         
-        ejercicios = CampoTextoAutoExpansivel(
+        ejercicios = EditableLabel(
             frame_conteudo,
-            width=90,
-            height=8,
-            max_height=30,
+            min_lines=3,
             bg=self.cores["campo_bg"],
             placeholder="Describa los ejercicios que el paciente debe realizar en casa..."
         )
         ejercicios.grid(row=5, column=0, sticky="ew", padx=5, pady=(0, 10))
         
-        ejercicios.texto.bind("<KeyRelease>", lambda e: self.marcar_modificado())
-        self.campos["Ejercicios recomendados"] = ejercicios
+        ejercicios.text.bind("<KeyRelease>", lambda e: self.marcar_modificado())
+        self.campos["Ejercicios recomendados"] = ejercicios.text
     
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     def criar_secao_seguimiento(self, frame_pai):
-        """Cria a seção de Acompanhamento e Reavaliação"""
-        # Frame da seção é o próprio frame_pai
+        """Versão otimizada da seção de acompanhamento"""
+        # Frame principal
         frame_secao = frame_pai
+        
+        # Label temporário de carregamento
+        self.label_carregando_seguimiento = tk.Label(
+            frame_secao, 
+            text="Carregando...", 
+            bg=self.cores["secao_bg"],
+            font=FONTES["titulo"]
+        )
+        self.label_carregando_seguimiento.pack(expand=True, fill="both")
+        
+        # Agendar a criação real dos componentes após um breve delay
+        frame_secao.after(100, lambda: self._criar_conteudo_seguimiento(frame_secao))
+
+    def _criar_conteudo_seguimiento(self, frame_secao):
+        """Cria o conteúdo real da seção após o delay"""
+        if not hasattr(self, 'label_carregando_seguimiento') or not self.label_carregando_seguimiento.winfo_exists():
+            return
+            
+        # Remove o label de carregamento
+        self.label_carregando_seguimiento.destroy()
         
         # Título da seção
         frame_titulo = tk.Frame(frame_secao, bg=self.cores["titulo_bg"])
@@ -2203,26 +2269,19 @@ class FormularioFisioterapia:
         )
         label_fecha.pack(side=tk.LEFT, anchor="w")
         
-        # Usar a classe DateEntryImproved, mas criar a instância APÓS terminar toda a interface
-        # Vamos criar um placeholder para o DateEntry por enquanto
-        frame_fecha_placeholder = tk.Frame(frame_fecha, width=120, height=25, bg=self.cores["secao_bg"])
-        frame_fecha_placeholder.pack(side=tk.LEFT, padx=5)
-        
         # Espaçador para alinhar com o lado direito
         tk.Frame(frame_programacion, height=5, bg=self.cores["secao_bg"]).pack(fill=tk.X)
         
         # Campo de texto com o placeholder correto
-        programacion = CampoTextoAutoExpansivel(
+        programacion = EditableLabel(
             frame_programacion,
-            width=85,
-            height=5,
-            max_height=20,
             bg=self.cores["campo_bg"],
-            placeholder="Detalles sobre la programación de las sesiones de seguimiento..."
+            placeholder="Detalles sobre la programación de las sesiones de seguimiento...",
+            placeholder_color=PLACEHOLDER_COLOR
         )
         programacion.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-        programacion.texto.bind("<KeyRelease>", lambda e: self.marcar_modificado())
-        self.campos["programacion_seguimiento"] = programacion
+        programacion.text.bind("<KeyRelease>", lambda e: self.marcar_modificado())
+        self.campos["programacion_seguimiento"] = programacion.text
         
         # ====== LADO DIREITO ======
         frame_criterios = tk.Frame(frame_conteudo_secao, bg=self.cores["secao_bg"])
@@ -2284,32 +2343,37 @@ class FormularioFisioterapia:
         )
         label_adicional.pack(anchor="w", padx=5, pady=5)
 
-        campo_adicional = CampoTextoAutoExpansivel(
+        campo_adicional = EditableLabel(
             frame_criterios,
-            width=85,
-            height=5,
-            max_height=20,
             bg=self.cores["campo_bg"],
-            placeholder="Ingrese criterios adicionales si son necesarios..."
+            placeholder="Ingrese criterios adicionales si son necesarios...",
+            placeholder_color=PLACEHOLDER_COLOR
         )
         campo_adicional.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-        campo_adicional.texto.bind("<KeyRelease>", lambda e: self.marcar_modificado())
-        self.campos["criterios_adicionales"] = campo_adicional
+        campo_adicional.text.bind("<KeyRelease>", lambda e: self.marcar_modificado())
+        self.campos["criterios_adicionales"] = campo_adicional.text
         
-        # Agora criamos o DateEntry depois que toda a interface está pronta
-        # Isso evita que o calendário abra automaticamente quando a aba é carregada
+        # Agora criamos o DateEntry depois que a interface está estável
+        # Criação com atraso adicional para garantir que a aba esteja completamente carregada
+        frame_secao.after(50, lambda: self._adicionar_date_entry(frame_fecha))
+
+    def _adicionar_date_entry(self, frame_fecha):
+        """Adiciona o DateEntry com segurança após a interface estar estável"""
         fecha_eval = DateEntryImproved(
             frame_fecha, 
             width=12, 
             bg=self.cores["secundaria"],
             fg='white', 
             date_pattern='dd/mm/yyyy',
-            borderwidth=0
+            borderwidth=0,
+            auto_popup=False
         )
         fecha_eval.pack(side=tk.LEFT, padx=5)
-        frame_fecha_placeholder.destroy()  # Removemos o placeholder
         self.campos["fecha_evaluacion"] = fecha_eval
-    
+
+
+
+
     def criar_botoes_acao(self, linha_inicio):
         """Cria os botões de ação do formulário"""
         linha = linha_inicio
